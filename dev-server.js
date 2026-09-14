@@ -1,12 +1,12 @@
-// Local stand-in for Vercel: serves "GEO Readiness" statically and routes /api/fetch.
+// Local stand-in for Vercel: serves web/ statically and routes /api/fetch.
 // Usage: node dev-server.js  (PORT defaults to 3847)
 
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.join(__dirname, 'GEO Readiness');
-const fetchHandler = require('./GEO Readiness/api/fetch.js');
+const ROOT = path.join(__dirname, 'web');
+const fetchHandler = require('./web/api/fetch.js');
 const PORT = Number(process.env.PORT) || 3847;
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
