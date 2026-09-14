@@ -63,23 +63,32 @@ PAGE_DATA:
 ${JSON.stringify(input)}`;
   }
 
-  async function judge(apiKey, result) {
-    const resp = await fetch(`${BASE}${MODEL}:generateContent?key=${encodeURIComponent(apiKey.trim())}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(result) }] }],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-          maxOutputTokens: 8192,
-          thinkingConfig: { thinkingBudget: 1024 }
-        }
-      })
+  async function judge(apiKey, result, note) {
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: buildPrompt(result) }] }],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+        maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 1024 }
+      }
     });
-    if (resp.status === 429) throw new Error('Gemini rate limit reached; used the built-in heuristics instead');
+    let resp;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      resp = await fetch(`${BASE}${MODEL}:generateContent?key=${encodeURIComponent(apiKey.trim())}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        body
+      }).catch(e => { throw new Error(e.name === 'TimeoutError' ? 'Gemini did not answer within 90 seconds' : 'Could not reach Gemini'); });
+      if (resp.status !== 429 || attempt === 1) break;
+      let wait = 20;
+      try { const e = await resp.json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = Math.min(30, Math.max(5, parseInt(r.retryDelay, 10) || 20)); } catch {}
+      if (note) note(`Gemini rate limit; retrying in ${wait}s`, 'yellow');
+      await new Promise(r => setTimeout(r, wait * 1000));
+    }
+    if (resp.status === 429) throw new Error('Gemini rate limit reached. Wait a minute and try again');
     if (resp.status === 400 || resp.status === 403) {
       let msg = '';
       try { msg = (await resp.json()).error?.message || ''; } catch {}

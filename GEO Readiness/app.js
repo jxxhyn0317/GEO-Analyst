@@ -25,7 +25,15 @@ function startAnalysis() {
   const input = document.getElementById('url-input');
   const url = normalizeInputUrl(input.value);
   if (!url) { input.focus(); return; }
-  const apiKey = document.getElementById('api-key-input').value.trim();
+  const keyInput = document.getElementById('api-key-input');
+  const apiKey = keyInput.value.trim();
+  if (!apiKey) {
+    keyInput.focus();
+    keyInput.classList.add('input-error');
+    keyInput.setAttribute('placeholder', 'Gemini API key required');
+    setTimeout(() => { keyInput.classList.remove('input-error'); keyInput.setAttribute('placeholder', 'Gemini API Key'); }, 3000);
+    return;
+  }
   storeKey(apiKey);
   history.replaceState(null, '', `?url=${encodeURIComponent(url)}`);
   document.getElementById('loading-url').textContent = url;
@@ -42,7 +50,6 @@ async function runAnalysis(url, apiKey) {
   fill.style.width = '0%';
   pct.textContent = '0%';
   feed.innerHTML = '';
-  document.getElementById('judge-step-text').textContent = apiKey ? 'Gemini judgment' : 'Gemini judgment (skipped, no key)';
 
   const progress = i => {
     steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); });
@@ -88,20 +95,11 @@ async function runAnalysis(url, apiKey) {
     note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
 
     progress(6);
-    if (apiKey) {
-      note(`Asking ${JUDGE.MODEL} to judge headings, the opening and citable facts`);
-      try {
-        const t1 = performance.now();
-        const j = await JUDGE.judge(apiKey, result);
-        GEO.applyJudgment(result, j);
-        note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
-      } catch (e) {
-        result.judgeError = e.message;
-        note(`${e.message}. Scores use the built-in heuristics.`, 'yellow');
-      }
-    } else {
-      note('No Gemini key: judgment items use the built-in heuristics', 'yellow');
-    }
+    note(`Asking ${JUDGE.MODEL} to judge headings, the opening and citable facts`);
+    const t1 = performance.now();
+    const judgment = await JUDGE.judge(apiKey, result, note);
+    GEO.applyJudgment(result, judgment);
+    note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
 
     progress(7);
     note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
@@ -153,8 +151,7 @@ function renderCapture(c) {
 }
 
 function judgedTag(g) {
-  if (!g.judged) return '';
-  return g.judged === 'gemini' ? '<span class="judged-tag ai">judged by Gemini</span>' : '<span class="judged-tag">heuristic</span>';
+  return g.judged === 'heuristic' ? '<span class="judged-tag">heuristic</span>' : '';
 }
 
 function renderCheckGroup(g) {
@@ -186,10 +183,8 @@ function renderDashboard(d) {
   const sc = colorOf(d.overallScore);
   const t = d.templates;
   const when = new Date(d.fetchedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-  const judgedBy = t.source === 'gemini' ? `judgment items and text by ${JUDGE.MODEL}` : 'judgment items by built-in heuristics';
   const notices = [
     d.measure.jsHeavy && `<div class="notice warn">The raw HTML carries very little text (${d.measure.substantiveChars.toLocaleString('en-US')} chars). The page most likely renders its content with JavaScript, which AI crawlers that do not run scripts never see. The scores below reflect that crawler view.</div>`,
-    d.judgeError && `<div class="notice warn">Gemini judgment did not run: ${GEO.esc(d.judgeError)}. Heading quality, the opening answer and fact counts use the built-in heuristics.</div>`,
     d.redirects.length && `<div class="notice info">The requested URL redirected; the audit measures the final page.</div>`
   ].filter(Boolean).join('');
 
@@ -220,7 +215,7 @@ function renderDashboard(d) {
           ${(t.weaknesses.length ? t.weaknesses : ['No failed checks']).map(w => `<div class="sw-item"><span class="sw-icon red">✗</span><span>${GEO.esc(w)}</span></div>`).join('')}
         </div>
       </div>
-      <p class="hero-method">Weights: D1 15% · D2 35% · D3 35% · D4 15%. Every point is a binary check or a stated band; ${judgedBy}.</p>
+      <p class="hero-method">Weights: D1 15% · D2 35% · D3 35% · D4 15%. Every point is a binary check or a stated band; judgment items and diagnosis text by ${JUDGE.MODEL}.</p>
     </section>
 
     <h3 class="section-title">Score Breakdown</h3>
@@ -253,7 +248,7 @@ function renderDashboard(d) {
     <div class="method-box">
       <b>How this audit works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
       Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one penalized example, a zero group shows the penalized evidence only.
-      Items tagged heuristic or judged by Gemini involve reading comprehension; all others are counted directly from the HTML. E-E-A-T content quality is out of scope and needs a human review.
+      Heading quality, the opening answer and citable facts need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T content quality is out of scope and needs a human review.
     </div>`;
 }
 
@@ -262,5 +257,8 @@ document.getElementById('url-input').addEventListener('keydown', e => { if (e.ke
 document.getElementById('api-key-input').value = readStoredKey();
 (() => {
   const q = new URLSearchParams(location.search).get('url');
-  if (q) { document.getElementById('url-input').value = q; startAnalysis(); }
+  if (q) {
+    document.getElementById('url-input').value = q;
+    if (readStoredKey()) startAnalysis();
+  }
 })();
