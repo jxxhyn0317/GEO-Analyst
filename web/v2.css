@@ -2,6 +2,8 @@
 body { background: var(--bg); }
 
 /* Landing */
+.logo-icon .geoa-mark { display: block; filter: drop-shadow(0 6px 14px rgba(37, 99, 235, 0.28)); }
+.loading-logo .geoa-mark { display: block; filter: drop-shadow(0 3px 8px rgba(37, 99, 235, 0.25)); }
 .api-key-input.input-error { border-color: #EF4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
 .product-tagline { max-width: 580px; text-wrap: balance; }
 .api-key-hint { font-size: 12px; color: var(--gray-400); margin-top: 8px; max-width: 580px; line-height: 1.5; text-align: center; word-break: keep-all; text-wrap: balance; }

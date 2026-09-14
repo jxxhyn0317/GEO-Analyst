@@ -8,10 +8,31 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css?v=9">
   <link rel="stylesheet" href="v2.css?v=1">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="geoaMarkBg" x1="4" y1="2" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#3B82F6"/>
+        <stop offset="1" stop-color="#1D4ED8"/>
+      </linearGradient>
+      <linearGradient id="geoaMarkEdge" x1="18" y1="0" x2="18" y2="20" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#FFFFFF" stop-opacity="0.45"/>
+        <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+      </linearGradient>
+      <symbol id="geoa-mark" viewBox="0 0 36 36">
+        <rect width="36" height="36" rx="10" fill="url(#geoaMarkBg)"/>
+        <rect x="0.5" y="0.5" width="35" height="35" rx="9.5" fill="none" stroke="url(#geoaMarkEdge)"/>
+        <rect x="9" y="13.5" width="14" height="3" rx="1.5" fill="#FFFFFF"/>
+        <rect x="12" y="19" width="15" height="2.5" rx="1.25" fill="#FFFFFF" fill-opacity="0.78"/>
+        <rect x="15" y="24" width="9" height="2.5" rx="1.25" fill="#FFFFFF" fill-opacity="0.78"/>
+        <path d="M26 8.4L26.75 10.25L28.6 11L26.75 11.75L26 13.6L25.25 11.75L23.4 11L25.25 10.25Z" fill="#FFFFFF"/>
+      </symbol>
+    </defs>
+  </svg>
   <div id="app">
     <!-- Screen 1: Landing -->
     <div id="screen-landing" class="screen active">
@@ -19,18 +40,7 @@
         <div class="landing-content">
           <div class="logo-area">
             <div class="logo-icon">
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <rect width="36" height="36" rx="10" fill="url(#logoGrad)"/>
-                <circle cx="16" cy="16" r="6.5" stroke="white" stroke-width="2"/>
-                <path d="M21 21L27 27" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M27.5 7L28.2 9.2L30.4 9.9L28.2 10.6L27.5 12.8L26.8 10.6L24.6 9.9L26.8 9.2L27.5 7Z" fill="white"/>
-                <defs>
-                  <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36">
-                    <stop stop-color="#60A5FA"/>
-                    <stop offset="1" stop-color="#2563EB"/>
-                  </linearGradient>
-                </defs>
-              </svg>
+              <svg class="geoa-mark" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             </div>
             <h1 class="product-name">GEO Analyst</h1>
           </div>
@@ -45,9 +55,6 @@
               <input type="text" id="url-input" placeholder="Paste the full URL of the page to audit" autocomplete="off" spellcheck="false">
               <button id="analyze-btn" class="btn-primary" onclick="startAnalysis()">
                 <span>Analyze</span>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
               </button>
             </div>
           </div>
@@ -71,12 +78,7 @@
       <div class="loading-container">
         <div class="loading-header">
           <div class="loading-logo">
-            <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
-              <rect width="36" height="36" rx="10" fill="url(#logoGrad)"/>
-              <path d="M10 18C10 13.58 13.58 10 18 10C22.42 10 26 13.58 26 18" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-              <path d="M14 22C14 19.79 15.79 18 18 18C20.21 18 22 19.79 22 22" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-              <circle cx="18" cy="26" r="1.5" fill="white"/>
-            </svg>
+            <svg class="geoa-mark" width="28" height="28" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             <span class="loading-brand">GEO Readiness</span>
           </div>
         </div>
