@@ -1,395 +1,202 @@
-// ===== CURRENT ANALYSIS DATA =====
+// ===== GEO ANALYST v2 =====
 let currentData = null;
+const KEY_STORE = 'geoa_gemini_key';
 
-// ===== SCREEN MANAGEMENT =====
+// ===== SCREENS =====
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
 }
+function showLanding() { showScreen('screen-landing'); }
 
-function showLanding() {
-  showScreen('screen-landing');
+function readStoredKey() { try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } }
+function storeKey(k) { try { k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); } catch {} }
+
+function normalizeInputUrl(raw) {
+  let s = raw.trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { return new URL(s).href; } catch { return null; }
 }
 
-// ===== LANDING PAGE =====
-function setExample(url) {
-  document.getElementById('url-input').value = url;
-}
-
-function toggleAdvanced() {
-  const toggle = document.querySelector('.advanced-toggle');
-  const opts = document.getElementById('advanced-options');
-  toggle.classList.toggle('open');
-  opts.classList.toggle('open');
-}
-
-// ===== ANALYSIS / LOADING =====
+// ===== ANALYSIS =====
 function startAnalysis() {
-  const url = document.getElementById('url-input').value.trim();
-  if (!url) {
-    document.getElementById('url-input').focus();
-    return;
-  }
-
-  const apiKeyInput = document.getElementById('api-key-input');
-  const apiKey = apiKeyInput?.value?.trim();
-  if (!apiKey) {
-    apiKeyInput.focus();
-    apiKeyInput.style.borderColor = '#EF4444';
-    apiKeyInput.setAttribute('placeholder', 'API Key required — get one free →');
-    setTimeout(() => { apiKeyInput.style.borderColor = ''; apiKeyInput.setAttribute('placeholder', 'Gemini API Key'); }, 3000);
-    return;
-  }
-  GEMINI_API_KEY = apiKey;
-
+  const input = document.getElementById('url-input');
+  const url = normalizeInputUrl(input.value);
+  if (!url) { input.focus(); return; }
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  storeKey(apiKey);
+  history.replaceState(null, '', `?url=${encodeURIComponent(url)}`);
   document.getElementById('loading-url').textContent = url;
   showScreen('screen-loading');
-  runRealAnalysis(url, GEMINI_API_KEY);
+  runAnalysis(url, apiKey);
 }
 
-// Real analysis with crawler + Gemini
-async function runRealAnalysis(url, apiKey) {
+async function runAnalysis(url, apiKey) {
   const steps = document.querySelectorAll('.step-item');
   const fill = document.getElementById('progress-fill');
   const pct = document.getElementById('progress-pct');
   const feed = document.getElementById('insights-feed');
-
-  // Reset
-  steps.forEach(s => { s.classList.remove('active', 'done'); });
+  steps.forEach(s => s.classList.remove('active', 'done'));
   fill.style.width = '0%';
   pct.textContent = '0%';
   feed.innerHTML = '';
+  document.getElementById('judge-step-text').textContent = apiKey ? 'Gemini judgment' : 'Gemini judgment (skipped, no key)';
 
-  function onProgress(stepIdx, label) {
-    // Mark previous steps as done
-    for (let i = 0; i < stepIdx; i++) {
-      steps[i].classList.remove('active');
-      steps[i].classList.add('done');
-    }
-    // Mark current step active
-    steps[stepIdx].classList.add('active');
-    const progress = Math.round(((stepIdx + 1) / steps.length) * 100);
-    fill.style.width = progress + '%';
-    pct.textContent = progress + '%';
-  }
-
-  function onInsight(text, color) {
+  const progress = i => {
+    steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); });
+    const p = Math.round(((i + 1) / steps.length) * 100);
+    fill.style.width = p + '%';
+    pct.textContent = p + '%';
+  };
+  const note = (text, color = 'blue') => {
     const div = document.createElement('div');
     div.className = 'insight-item insight-enter';
-    div.innerHTML = `<span class="insight-dot ${color}"></span>${text}`;
+    div.innerHTML = `<span class="insight-dot ${color}"></span>${GEO.esc(text)}`;
     feed.appendChild(div);
-    // Auto-scroll to latest
     feed.scrollTop = feed.scrollHeight;
-    // Trigger entrance animation
     requestAnimationFrame(() => div.classList.remove('insight-enter'));
-  }
+  };
+  const tick = () => new Promise(r => setTimeout(r, 260));
 
   try {
-    // Gemini handles everything — crawling + analysis
-    const result = await runGeminiAnalysis(apiKey, url, onProgress, onInsight);
+    progress(0);
+    note(`Requesting ${new URL(url).hostname}`);
+    const t0 = performance.now();
+    const resp = await fetch(`api/fetch?url=${encodeURIComponent(url)}`);
+    const page = await resp.json().catch(() => ({ ok: false, error: `Fetch service error (HTTP ${resp.status})` }));
+    if (!page.ok) throw new Error(page.error || 'The page could not be fetched.');
+    note(`HTTP ${page.status} · ${(page.bytes / 1024).toFixed(0)} KB of HTML in ${((performance.now() - t0) / 1000).toFixed(1)}s`, 'green');
+    if (page.redirects?.length) note(`Followed ${page.redirects.length} redirect${page.redirects.length > 1 ? 's' : ''} to ${page.finalUrl}`, 'yellow');
+    if (page.truncated) note('HTML larger than 4 MB; measured the first 4 MB', 'yellow');
 
-    // Complete
+    progress(1);
+    await tick();
+    const result = GEO.analyze(page.html, url, page);
+    const [d1, d2, d3, d4] = result.dimensions;
+    note(`${result.measure.headings.length} content headings · ${result.measure.substantiveChars.toLocaleString('en-US')} chars of substantive text`);
+    if (result.measure.jsHeavy) note('Very little text in the raw HTML; the content likely renders with JavaScript', 'red');
+
+    progress(2); await tick();
+    note(`D1 URL & Page Context: ${d1.score}/100`, colorOf(d1.score));
+    progress(3); await tick();
+    note(`D2 Page Structure: ${d2.score}/100`, colorOf(d2.score));
+    progress(4); await tick();
+    note(`D3 Answerability & Content Depth: ${d3.score}/100`, colorOf(d3.score));
+    progress(5); await tick();
+    note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
+
+    progress(6);
+    if (apiKey) {
+      note(`Asking ${JUDGE.MODEL} to judge headings, the opening and citable facts`);
+      try {
+        const t1 = performance.now();
+        const j = await JUDGE.judge(apiKey, result);
+        GEO.applyJudgment(result, j);
+        note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
+      } catch (e) {
+        result.judgeError = e.message;
+        note(`${e.message}. Scores use the built-in heuristics.`, 'yellow');
+      }
+    } else {
+      note('No Gemini key: judgment items use the built-in heuristics', 'yellow');
+    }
+
+    progress(7);
+    note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
+    steps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
     fill.style.width = '100%';
     pct.textContent = '100%';
-    steps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-
-    setTimeout(() => {
-      currentData = result;
-      renderDashboard(currentData);
-      showScreen('screen-dashboard');
-    }, 600);
-
+    currentData = result;
+    setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); }, 500);
   } catch (err) {
-    onInsight(`Error: ${err.message}`, 'red');
-    onInsight('Retrying analysis...', 'yellow');
-    console.error('Analysis error:', err);
-
-    // Show error state instead of falling back to sample data
-    setTimeout(() => {
-      const errorContainer = document.getElementById('dash-content');
-      document.getElementById('dash-content').innerHTML = '';
-      showScreen('screen-dashboard');
-      document.getElementById('dash-content').innerHTML = `
-        <section class="hero-section" style="text-align:center;padding:60px 20px">
-          <div style="font-size:48px;margin-bottom:16px">⚠️</div>
-          <h2 style="color:var(--gray-800);margin-bottom:8px">Analysis Failed</h2>
-          <p style="color:var(--gray-500);margin-bottom:24px">${err.message}</p>
-          <button onclick="showLanding()" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:10px 24px;border:none;border-radius:8px;background:var(--blue-500);color:white;font-size:14px;cursor:pointer">
-            ← Try Again
-          </button>
-        </section>
-      `;
-    }, 2000);
+    console.error(err);
+    note(err.message, 'red');
+    setTimeout(() => renderError(url, err.message), 900);
   }
 }
 
-
-// ===== DASHBOARD RENDERING =====
-function getStatusColor(status) {
-  return status === 'red' ? 'red' : status === 'yellow' ? 'yellow' : 'green';
+function renderError(url, message) {
+  showScreen('screen-dashboard');
+  document.getElementById('dash-content').innerHTML = `
+    <section class="hero-section" style="text-align:center;padding:60px 20px">
+      <h2 style="color:var(--gray-800);margin-bottom:8px">Analysis failed</h2>
+      <p style="color:var(--gray-500);margin-bottom:6px">${GEO.esc(message)}</p>
+      <p style="color:var(--gray-400);font-size:13px;margin-bottom:24px;word-break:break-all">${GEO.esc(url)}</p>
+      <button onclick="showLanding()" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:10px 24px">Try again</button>
+    </section>`;
 }
 
-function getScoreColor(score) {
-  if (score >= 60) return 'green';
-  if (score >= 40) return 'yellow';
-  return 'red';
-}
+// ===== DASHBOARD =====
+function colorOf(score) { return score >= 60 ? 'green' : score >= 40 ? 'yellow' : 'red'; }
+function statusLabelFor(c) { return c === 'green' ? 'Reasonably Prepared' : c === 'yellow' ? 'Needs Improvement' : 'Needs Significant Improvement'; }
+function dimLabelFor(c) { return c === 'green' ? 'Sufficient' : c === 'yellow' ? 'Needs Improvement' : 'Weak'; }
+const HEX = { green: '#22C55E', yellow: '#F59E0B', red: '#EF4444' };
 
-function renderBreakdownRow(item) {
-  const pct = item.max > 0 ? Math.round((item.points / item.max) * 100) : 0;
-  const barColor = pct >= 70 ? 'var(--green-500)' : pct >= 40 ? 'var(--yellow-500)' : 'var(--red-500)';
-  return `
-    <div class="breakdown-row">
-      <div class="breakdown-top">
-        <span class="breakdown-name">${item.name}</span>
-        <span class="breakdown-score">${item.points}<span class="breakdown-max">/${item.max}</span></span>
-      </div>
-      <div class="breakdown-bar-bg">
-        <div class="breakdown-bar-fill" style="width:${pct}%;background:${barColor}"></div>
-      </div>
-      <div class="breakdown-reason">${item.reason || ''}</div>
-    </div>
-  `;
-}
-
-function renderBreakdown(breakdown) {
-  if (!breakdown || breakdown.length === 0) return '';
-  return `
-    <div class="score-breakdown">
-      <div class="breakdown-header">
-        <span class="breakdown-label">SCORING BREAKDOWN</span>
-      </div>
-      ${breakdown.map(item => {
-        if (item.sub && item.sub.length > 0) {
-          // Parent with sub-items (e.g. H-tag Structure)
-          const pct = item.max > 0 ? Math.round((item.points / item.max) * 100) : 0;
-          const barColor = pct >= 70 ? 'var(--green-500)' : pct >= 40 ? 'var(--yellow-500)' : 'var(--red-500)';
-          return `
-            <div class="breakdown-group">
-              <div class="breakdown-row breakdown-parent">
-                <div class="breakdown-top">
-                  <span class="breakdown-name breakdown-group-name">${item.name}</span>
-                  <span class="breakdown-score">${item.points}<span class="breakdown-max">/${item.max}</span></span>
-                </div>
-                <div class="breakdown-bar-bg">
-                  <div class="breakdown-bar-fill" style="width:${pct}%;background:${barColor}"></div>
-                </div>
-              </div>
-              <div class="breakdown-sub-items">
-                ${item.sub.map(sub => renderBreakdownRow(sub)).join('')}
-              </div>
-            </div>
-          `;
-        }
-        return renderBreakdownRow(item);
-      }).join('')}
-    </div>
-  `;
-}
-
-function renderEvidence(evidence) {
-  let html = '<div class="score-card-evidence">';
-
-  // Heading structure sample
-  if (evidence.headingSample) {
-    html += `<div class="evidence-code-block"><span class="evidence-label">Heading structure:</span><code>${escapeHtml(evidence.headingSample)}</code></div>`;
-  }
-
-  // Good examples
-  if (evidence.good && evidence.good.length > 0 && evidence.good[0]) {
-    html += '<div class="evidence-list">';
-    html += '<span class="evidence-label">✓ Found:</span>';
-    evidence.good.forEach(g => {
-      const urlMatch = g.match(/https?:\/\/[^\s,)]+/);
-      if (urlMatch) {
-        const url = urlMatch[0];
-        const desc = g.replace(url, '').replace(/^[\s\-–—:]+/, '').trim();
-        html += `<div class="evidence-item evidence-good-item">
-          <a href="${url}" target="_blank" class="evidence-url">${truncateUrl(url)}</a>
-          ${desc ? `<span class="evidence-desc">${escapeHtml(desc)}</span>` : ''}
-        </div>`;
-      } else {
-        html += `<div class="evidence-item evidence-good-item"><span class="evidence-desc">${escapeHtml(g)}</span></div>`;
-      }
-    });
-    html += '</div>';
-  }
-
-  // Bad examples
-  if (evidence.bad && evidence.bad.length > 0 && evidence.bad[0]) {
-    html += '<div class="evidence-list">';
-    html += '<span class="evidence-label">✗ Issues:</span>';
-    evidence.bad.forEach(b => {
-      const urlMatch = b.match(/https?:\/\/[^\s,)]+/);
-      if (urlMatch) {
-        const url = urlMatch[0];
-        const desc = b.replace(url, '').replace(/^[\s\-–—:]+/, '').trim();
-        html += `<div class="evidence-item evidence-bad-item">
-          <a href="${url}" target="_blank" class="evidence-url">${truncateUrl(url)}</a>
-          ${desc ? `<span class="evidence-desc">${escapeHtml(desc)}</span>` : ''}
-        </div>`;
-      } else {
-        html += `<div class="evidence-item evidence-bad-item"><span class="evidence-desc">${escapeHtml(b)}</span></div>`;
-      }
-    });
-    html += '</div>';
-  }
-
-  html += '</div>';
-  return html;
-}
-
-function renderAiAccessibility(ai) {
-  return '';
-  /* AI Accessibility removed */
-
-  // Key findings
-  if (ai.keyFindings && ai.keyFindings.length > 0) {
-    html += '<div class="ai-findings">';
-    ai.keyFindings.forEach(f => {
-      const isPositive = f.toLowerCase().includes('readable') || f.toLowerCase().includes('accessible') || f.toLowerCase().includes('clear') || f.toLowerCase().includes('well');
-      html += `<div class="ai-finding ${isPositive ? 'ai-finding-good' : 'ai-finding-bad'}">${escapeHtml(f)}</div>`;
-    });
-    html += '</div>';
-  }
-
-  // Blocked URLs
-  if (ai.blockedUrls && ai.blockedUrls.length > 0 && ai.blockedUrls[0]) {
-    html += '<div class="ai-blocked-list"><span class="evidence-label">Blocked/Error URLs:</span>';
-    ai.blockedUrls.forEach(b => {
-      const urlMatch = b.match(/https?:\/\/[^\s,—–]+/);
-      if (urlMatch) {
-        const url = urlMatch[0];
-        const reason = b.replace(url, '').replace(/^[\s\-—–:]+/, '').trim();
-        html += `<div class="evidence-item evidence-bad-item"><a href="${url}" target="_blank" class="evidence-url">${truncateUrl(url)}</a>${reason ? `<span class="evidence-desc">${escapeHtml(reason)}</span>` : ''}</div>`;
-      } else {
-        html += `<div class="evidence-item evidence-bad-item"><span class="evidence-desc">${escapeHtml(b)}</span></div>`;
-      }
-    });
-    html += '</div>';
-  }
-
-  // JS dependent
-  if (ai.jsDependent && ai.jsDependent.length > 0 && ai.jsDependent[0]) {
-    html += '<div class="ai-blocked-list"><span class="evidence-label">JS-Dependent Content:</span>';
-    ai.jsDependent.forEach(j => {
-      const urlMatch = j.match(/https?:\/\/[^\s,—–]+/);
-      if (urlMatch) {
-        const url = urlMatch[0];
-        const desc = j.replace(url, '').replace(/^[\s\-—–:]+/, '').trim();
-        html += `<div class="evidence-item evidence-bad-item"><a href="${url}" target="_blank" class="evidence-url">${truncateUrl(url)}</a>${desc ? `<span class="evidence-desc">${escapeHtml(desc)}</span>` : ''}</div>`;
-      } else {
-        html += `<div class="evidence-item evidence-bad-item"><span class="evidence-desc">${escapeHtml(j)}</span></div>`;
-      }
-    });
-    html += '</div>';
-  }
-
-  html += '</div>';
-  return html;
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function truncateUrl(url) {
-  try {
-    const u = new URL(url);
-    const path = u.pathname + u.search;
-    return u.hostname + (path.length > 50 ? path.substring(0, 47) + '...' : path);
-  } catch { return url.length > 60 ? url.substring(0, 57) + '...' : url; }
-}
-
-function scoreRingSVG(score, size = 100, strokeWidth = 8) {
-  const r = (size - strokeWidth) / 2;
+function scoreRingSVG(score, size = 100, stroke = 8) {
+  const r = (size - stroke) / 2;
   const c = Math.PI * 2 * r;
-  const color = getScoreColor(score);
-  const strokeColor = color === 'green' ? '#22C55E' : color === 'yellow' ? '#F59E0B' : '#EF4444';
-  const bgColor = color === 'green' ? '#DCFCE7' : color === 'yellow' ? '#FEF3C7' : '#FEE2E2';
+  const color = colorOf(score);
+  const bg = color === 'green' ? '#DCFCE7' : color === 'yellow' ? '#FEF3C7' : '#FEE2E2';
   return `
     <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${bgColor}" stroke-width="${strokeWidth}" fill="none" transform="rotate(-90 ${size/2} ${size/2})"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${strokeColor}" stroke-width="${strokeWidth}" fill="none"
-        stroke-dasharray="${c}" stroke-dashoffset="${c - (c * score / 100)}" stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"/>
-    </svg>
-  `;
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${bg}" stroke-width="${stroke}" fill="none"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${HEX[color]}" stroke-width="${stroke}" fill="none"
+        stroke-dasharray="${c * score / 100} ${c}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+    </svg>`;
 }
 
-function badgeHTML(status, label) {
-  return `<span class="hero-badge badge-${status}">${label}</span>`;
+function renderCapture(c) {
+  const badge = c.tone === 'good' ? '<span class="cap-badge good">WELL DONE</span>' : '<span class="cap-badge bad">PENALIZED</span>';
+  return `<div class="cap cap-${c.tone}"><div class="cap-head">${badge}<span class="cap-caption">${c.caption}</span></div><pre>${c.code}</pre></div>`;
 }
 
-function miniScoreHTML(score) {
-  const c = getScoreColor(score);
-  return `<span class="mini-score ${c}">${score}</span>`;
+function judgedTag(g) {
+  if (!g.judged) return '';
+  return g.judged === 'gemini' ? '<span class="judged-tag ai">judged by Gemini</span>' : '<span class="judged-tag">heuristic</span>';
 }
 
-function linkify(url) {
-  if (url.startsWith('http')) {
-    return `<a href="${url}" target="_blank" rel="noopener" class="ext-link" onclick="event.stopPropagation()">${url}</a>`;
-  }
-  const base = currentData?.url || '';
-  const full = base.replace(/\/$/, '') + (url.startsWith('/') ? '' : '/') + url;
-  return `<a href="${full}" target="_blank" rel="noopener" class="ext-link" onclick="event.stopPropagation()">${url}</a>`;
+function renderCheckGroup(g) {
+  const color = colorOf(Math.round(g.points / g.max * 100));
+  const rows = (g.checks || []).map(c => `
+    <div class="check-row">
+      <span class="check-ic ${c.pass ? 'p' : 'f'}">${c.pass ? '✓' : '✗'}</span>
+      <span class="check-txt">${GEO.esc(c.text)}${c.meas ? ` <span class="meas">· ${GEO.esc(c.meas)}</span>` : ''}${c.judged ? judgedTag(c) : ''}</span>
+      <span class="check-pts ${c.pass ? 'p' : 'f'}">${c.pass ? c.pts : 0}/${c.pts}</span>
+    </div>`).join('');
+  const band = g.band ? `<div class="band-note"><b>Band:</b> ${GEO.esc(g.band)}<br><b>Measured:</b> ${GEO.esc(g.measured)}</div>` : '';
+  const evi = g.captures.length ? `
+    <details class="evi">
+      <summary>EVIDENCE (${g.captures.length})</summary>
+      <div class="evi-body">${g.captures.map(renderCapture).join('')}</div>
+    </details>` : '';
+  return `
+    <div class="check-group">
+      <div class="check-group-head">
+        <span class="check-group-name">${GEO.esc(g.name)}${g.band ? judgedTag(g) : ''}</span>
+        <span class="check-group-pts">${g.points}<span class="mx"> / ${g.max}</span></span>
+      </div>
+      <div class="group-gauge"><div class="group-gauge-fill" style="width:${g.points / g.max * 100}%;background:${HEX[color]}"></div></div>
+      ${rows}${band}${evi}
+    </div>`;
 }
 
 function renderDashboard(d) {
-  // Defensive defaults for missing data
-  d.strengths = d.strengths || [];
-  d.weaknesses = d.weaknesses || [];
-  d.dimensions = d.dimensions || [];
-  d.issues = d.issues || [];
-  d.pages = d.pages || [];
-  d.eeat = d.eeat || {};
-  d.eeat.experience = d.eeat.experience || {score:0,status:'red',signals:{found:[],missing:[]},working:'',missing_detail:'',recommendation:''};
-  d.eeat.expertise = d.eeat.expertise || {score:0,status:'red',signals:{found:[],missing:[]},working:'',missing_detail:'',recommendation:''};
-  d.eeat.authoritativeness = d.eeat.authoritativeness || {score:0,status:'red',signals:{found:[],missing:[]},working:'',missing_detail:'',recommendation:''};
-  d.eeat.trust = d.eeat.trust || {score:0,status:'red',signals:{found:[],missing:[]},working:'',missing_detail:'',recommendation:''};
-  d.pages.forEach(p => {
-    p.scores = p.scores || {ia:0,heading:0,text:0,eeat:0};
-    p.issues = p.issues || [];
-    p.headings = p.headings || [];
-    p.eeatSignals = p.eeatSignals || [];
-    p.issueDetails = p.issueDetails || [];
-    p.actions = p.actions || [];
-  });
+  const sc = colorOf(d.overallScore);
+  const t = d.templates;
+  const when = new Date(d.fetchedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  const judgedBy = t.source === 'gemini' ? `judgment items and text by ${JUDGE.MODEL}` : 'judgment items by built-in heuristics';
+  const notices = [
+    d.measure.jsHeavy && `<div class="notice warn">The raw HTML carries very little text (${d.measure.substantiveChars.toLocaleString('en-US')} chars). The page most likely renders its content with JavaScript, which AI crawlers that do not run scripts never see. The scores below reflect that crawler view.</div>`,
+    d.judgeError && `<div class="notice warn">Gemini judgment did not run: ${GEO.esc(d.judgeError)}. Heading quality, the opening answer and fact counts use the built-in heuristics.</div>`,
+    d.redirects.length && `<div class="notice info">The requested URL redirected; the audit measures the final page.</div>`
+  ].filter(Boolean).join('');
 
-  // Recalculate E-E-A-T dimension score as sum of 4 sub-scores (each out of 25)
-  if (d.eeat) {
-    const eeatSum = Math.min(d.eeat.experience?.score || 0, 25)
-      + Math.min(d.eeat.expertise?.score || 0, 25)
-      + Math.min(d.eeat.authoritativeness?.score || 0, 25)
-      + Math.min(d.eeat.trust?.score || 0, 25);
-    const eeatDim = d.dimensions.find(dim => dim.id === 'eeat');
-    if (eeatDim) {
-      eeatDim.score = eeatSum;
-      eeatDim.status = eeatSum >= 70 ? 'green' : eeatSum >= 40 ? 'yellow' : 'red';
-    }
-  }
-
-  // Recalculate overallScore as average of 4 dimensions
-  if (d.dimensions.length > 0) {
-    const avg = Math.round(d.dimensions.reduce((sum, dim) => sum + (dim.score || 0), 0) / d.dimensions.length);
-    d.overallScore = avg;
-    d.status = avg >= 70 ? 'green' : avg >= 40 ? 'yellow' : 'red';
-    d.statusLabel = avg >= 70 ? 'Reasonably Prepared' : avg >= 40 ? 'Needs Improvement' : 'Needs Significant Improvement';
-  }
-
-  currentData = d;
-  const container = document.getElementById('dash-content');
-  const sc = getStatusColor(d.status);
-
-  container.innerHTML = `
-    <!-- SECTION A: Hero Summary -->
+  document.getElementById('dash-content').innerHTML = `
+    ${notices}
     <section class="hero-section">
       <div class="hero-top">
-        <div class="hero-meta">
-          <div class="hero-url">${d.url}</div>
-          <div class="hero-timestamp">Analyzed ${new Date(d.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-          <div class="hero-pages">${d.pagesScanned} pages scanned</div>
-        </div>
         <div class="hero-score-area">
           <div class="hero-score-ring">
             ${scoreRingSVG(d.overallScore, 100, 8)}
@@ -397,269 +204,63 @@ function renderDashboard(d) {
           </div>
           <div class="hero-score-label">GEO Readiness</div>
         </div>
+        <div class="hero-meta hero-meta-right">
+          <div class="hero-url-label">Audited URL</div>
+          <a class="hero-url-link" href="${GEO.esc(d.url)}" target="_blank" rel="noopener" title="${GEO.esc(d.url)}">${GEO.esc(d.url)}</a>
+          <div class="hero-timestamp">Analyzed ${GEO.esc(when)} · single page, raw HTML</div>
+        </div>
       </div>
-      <h2 class="hero-headline">${d.headline}</h2>
-      ${badgeHTML(sc, d.statusLabel)}
+      <div class="hero-badge-row"><span class="hero-badge badge-${sc}">${statusLabelFor(sc)}</span></div>
+      <h2 class="hero-headline">${GEO.esc(t.headline)}</h2>
       <div class="hero-strengths-weaknesses">
-        <div class="sw-column">
-          <h4>Strengths</h4>
-          ${d.strengths.map(s => `<div class="sw-item"><span class="sw-icon green">✓</span><span>${s}</span></div>`).join('')}
+        <div class="sw-column"><h4>Strengths</h4>
+          ${(t.strengths.length ? t.strengths : ['No checklist group earns full marks yet']).map(s => `<div class="sw-item"><span class="sw-icon green">✓</span><span>${GEO.esc(s)}</span></div>`).join('')}
         </div>
-        <div class="sw-column">
-          <h4>Weaknesses</h4>
-          ${d.weaknesses.map(w => `<div class="sw-item"><span class="sw-icon red">✗</span><span>${w}</span></div>`).join('')}
+        <div class="sw-column"><h4>Weaknesses</h4>
+          ${(t.weaknesses.length ? t.weaknesses : ['No failed checks']).map(w => `<div class="sw-item"><span class="sw-icon red">✗</span><span>${GEO.esc(w)}</span></div>`).join('')}
         </div>
       </div>
+      <p class="hero-method">Weights: D1 15% · D2 35% · D3 35% · D4 15%. Every point is a binary check or a stated band; ${judgedBy}.</p>
     </section>
 
-    <!-- AI ACCESSIBILITY SECTION -->
-    ${d.aiAccessibility ? renderAiAccessibility(d.aiAccessibility) : ''}
-
-    <!-- SECTION B: Score Breakdown -->
-    <h3 class="section-title">GEO Readiness Score Breakdown</h3>
+    <h3 class="section-title">Score Breakdown</h3>
     <div class="scores-grid">
       ${d.dimensions.map(dim => {
-        const dc = getScoreColor(dim.score);
+        const dc = colorOf(dim.score);
+        const pd = t.perDim[dim.key];
         return `
           <div class="score-card">
             <div class="score-card-header">
               <span class="score-card-num">Dimension ${dim.num}</span>
-              <span class="score-card-badge badge-${dc}">${dc === 'green' ? 'Sufficient' : dc === 'yellow' ? 'Needs Improvement' : 'Weak'}</span>
+              <span class="weight-chip">weight ${dim.weight}</span>
             </div>
             <h4 class="score-card-title">${dim.title}</h4>
-            <div class="score-card-score">
-              <span class="num score-${dc}">${dim.score}</span>
-              <span class="total">/ 100</span>
+            <div class="score-card-score"><span class="num score-${dc}">${dim.score}</span><span class="total">/ 100</span><span class="score-card-badge badge-${dc}">${dimLabelFor(dc)}</span></div>
+            ${dim.capped ? `<div class="cap-note">Checks sum to ${dim.rawScore}; shown as ${dim.score} because no score reaches 100 (headroom above best practice is reserved).</div>` : ''}
+            <ul class="diag-list">${pd.diagnosis.map(x => `<li>${GEO.esc(x)}</li>`).join('')}</ul>
+            <div class="score-breakdown">
+              <div class="breakdown-header"><span class="breakdown-label">SCORING BREAKDOWN</span></div>
+              ${dim.breakdown.map(renderCheckGroup).join('')}
             </div>
-            <p class="score-card-diag">${dim.diagnosis}</p>
-            ${dim.breakdown ? renderBreakdown(dim.breakdown) : ''}
-            <div class="score-card-weaknesses">
-              ${dim.weaknesses.slice(0, 3).map(w => `<div class="score-weakness">${w}</div>`).join('')}
+            <div class="todo-box">
+              <div class="todo-label">WHAT TO DO</div>
+              <ol>${pd.todo.map(x => `<li>${GEO.esc(x)}</li>`).join('')}</ol>
             </div>
-            <div class="score-card-direction">${dim.direction}</div>
-            ${dim.evidence ? renderEvidence(dim.evidence) : ''}
-          </div>
-        `;
+          </div>`;
       }).join('')}
     </div>
 
-    <!-- SECTION D: E-E-A-T Detailed -->
-    <h3 class="section-title">E-E-A-T Detailed Analysis</h3>
-    <div class="eeat-grid">
-      ${renderEEATCard('E', 'Experience', d.eeat.experience, '#8B5CF6')}
-      ${renderEEATCard('E', 'Expertise', d.eeat.expertise, '#3B82F6')}
-      ${renderEEATCard('A', 'Authoritativeness', d.eeat.authoritativeness, '#0EA5E9')}
-      ${renderEEATCard('T', 'Trust', d.eeat.trust, '#10B981')}
-    </div>
-
-    <!-- SECTION E: Page-level -->
-    <h3 class="section-title">Page-level GEO Diagnosis</h3>
-    <div class="pages-table-wrap">
-      <table class="pages-table">
-        <thead>
-          <tr>
-            <th>Page Title</th>
-            <th>Type</th>
-            <th>GEO</th>
-            <th>IA</th>
-            <th>Heading</th>
-            <th>Text</th>
-            <th>E-E-A-T</th>
-            <th>Top Issues</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${d.pages.map((p, i) => {
-            return `
-            <tr onclick="openPageDrawer(${i})">
-              <td>
-                <div style="font-weight:500;color:var(--gray-800);margin-bottom:2px">${p.title}</div>
-                <div style="font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${linkify(p.url)}</div>
-              </td>
-              <td><span class="page-type-tag">${p.type}</span></td>
-              <td>${miniScoreHTML(p.geoScore)}</td>
-              <td>${miniScoreHTML(p.scores.ia)}</td>
-              <td>${miniScoreHTML(p.scores.heading)}</td>
-              <td>${miniScoreHTML(p.scores.text)}</td>
-              <td>${miniScoreHTML(p.scores.eeat)}</td>
-              <td>
-                <div class="page-issues">
-                  ${p.issues.slice(0, 2).map(iss => `<span class="page-issue-tag">${iss}</span>`).join('')}
-                </div>
-              </td>
-            </tr>
-          `}).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Action Plan removed to minimize token usage -->
-  `;
+    <div class="method-box">
+      <b>How this audit works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
+      Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one penalized example, a zero group shows the penalized evidence only.
+      Items tagged heuristic or judged by Gemini involve reading comprehension; all others are counted directly from the HTML. E-E-A-T content quality is out of scope and needs a human review.
+    </div>`;
 }
 
-function renderEEATCard(letter, title, data, bgColor) {
-  // E-E-A-T sub-scores are out of 25
-  const score25 = Math.min(data.score, 25);
-  const pct = Math.round((score25 / 25) * 100);
-  const sc = pct >= 70 ? 'green' : pct >= 40 ? 'yellow' : 'red';
-  return `
-    <div class="eeat-card">
-      <div class="eeat-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="eeat-letter" style="background:${bgColor}">${letter}</div>
-          <div>
-            <div class="eeat-title">${title}</div>
-            <div class="eeat-status score-${sc}">${sc === 'green' ? 'Sufficient' : sc === 'yellow' ? 'Needs Improvement' : 'Weak'}</div>
-          </div>
-        </div>
-        <div class="eeat-score-badge">
-          <span class="num score-${sc}">${score25}</span>
-          <span class="total">/ 25</span>
-        </div>
-      </div>
-      <div class="eeat-subsection">
-        <h5>Detected Signals</h5>
-        <div class="eeat-signals">
-          ${data.signals.found.map(s => `<span class="signal-tag signal-found">${s}</span>`).join('')}
-          ${data.signals.missing.slice(0, 3).map(s => `<span class="signal-tag signal-missing">${s}</span>`).join('')}
-        </div>
-      </div>
-      <div class="eeat-subsection">
-        <h5>What's Working</h5>
-        <p style="font-size:12px;color:var(--gray-600);line-height:1.5">${data.working}</p>
-      </div>
-      <div class="eeat-subsection">
-        <h5>What's Missing</h5>
-        <p style="font-size:12px;color:var(--gray-500);line-height:1.5">${data.missing_detail}</p>
-      </div>
-      <div class="eeat-rec">→ ${data.recommendation}</div>
-    </div>
-  `;
-}
-
-function renderActionGroup(label, className, actions) {
-  return `
-    <div class="action-priority-group">
-      <div class="action-priority-label ${className}">${label}</div>
-      <div class="actions-list">
-        ${actions.map(a => `
-          <div class="action-card">
-            <div>
-              <h4 class="action-title">${a.title}</h4>
-              <span class="action-dimension">${a.dimension}</span>
-              <p class="action-problem">${a.problem}</p>
-              <div class="action-tags">
-                <span class="action-tag">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                  ${a.relevance.substring(0, 60)}...
-                </span>
-              </div>
-            </div>
-            <div class="action-right">
-              <span class="action-impact impact-${a.impact.toLowerCase()}">Impact: ${a.impact}</span>
-              <span class="action-difficulty difficulty-${a.difficulty.toLowerCase()}">Effort: ${a.difficulty}</span>
-              <span class="action-pages">${a.pages}</span>
-            </div>
-            <div class="action-example"><strong>Example:</strong> ${a.example}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-// ===== PAGE DETAIL DRAWER =====
-function openPageDrawer(index) {
-  const p = currentData.pages[index];
-  const overlay = document.getElementById('page-drawer-overlay');
-  const drawer = document.getElementById('page-drawer');
-  const title = document.getElementById('drawer-title');
-  const body = document.getElementById('drawer-body');
-
-  title.textContent = p.title;
-  body.innerHTML = `
-    <div class="drawer-section">
-      <div class="drawer-section-title">Page Information</div>
-      <div class="drawer-url"><a href="${p.url}" target="_blank" rel="noopener" class="ext-link">${p.url}</a></div>
-      <div style="margin-top:6px"><span class="drawer-page-type">${p.type}</span></div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">GEO Scores</div>
-      <div class="drawer-scores">
-        <div class="drawer-score-item">
-          <div class="drawer-score-label">Overall GEO</div>
-          <div class="drawer-score-val score-${getScoreColor(p.geoScore)}">${p.geoScore}</div>
-        </div>
-        <div class="drawer-score-item">
-          <div class="drawer-score-label">Semantic IA</div>
-          <div class="drawer-score-val score-${getScoreColor(p.scores.ia)}">${p.scores.ia}</div>
-        </div>
-        <div class="drawer-score-item">
-          <div class="drawer-score-label">Headings</div>
-          <div class="drawer-score-val score-${getScoreColor(p.scores.heading)}">${p.scores.heading}</div>
-        </div>
-        <div class="drawer-score-item">
-          <div class="drawer-score-label">Text Sufficiency</div>
-          <div class="drawer-score-val score-${getScoreColor(p.scores.text)}">${p.scores.text}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">Heading Structure</div>
-      <div class="drawer-headings">
-        ${p.headings.map(h => `
-          <div class="drawer-heading-item">
-            <span class="h-tag">${h.tag}</span>
-            <span>${h.text}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">Extracted Content Preview</div>
-      <div class="drawer-text-preview">${p.textPreview}</div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">E-E-A-T Signals Detected</div>
-      <div class="drawer-tags">
-        ${p.eeatSignals.map(s => `<span class="drawer-tag signal">${s}</span>`).join('')}
-      </div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">Issues Detected</div>
-      <div class="drawer-tags">
-        ${p.issueDetails.map(s => `<span class="drawer-tag issue">${s}</span>`).join('')}
-      </div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">Recommended Actions</div>
-      <div class="drawer-actions">
-        ${p.actions.map(a => `<div class="drawer-action-item">${a}</div>`).join('')}
-      </div>
-    </div>
-  `;
-
-  overlay.classList.add('open');
-  drawer.classList.add('open');
-}
-
-function closeDrawer() {
-  document.getElementById('page-drawer-overlay').classList.remove('open');
-  document.getElementById('page-drawer').classList.remove('open');
-}
-
-// Close drawer on Escape
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeDrawer();
-});
-
-// Enter key to analyze
-document.getElementById('url-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') startAnalysis();
-});
+// ===== BOOT =====
+document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') startAnalysis(); });
+document.getElementById('api-key-input').value = readStoredKey();
+(() => {
+  const q = new URLSearchParams(location.search).get('url');
+  if (q) { document.getElementById('url-input').value = q; startAnalysis(); }
+})();

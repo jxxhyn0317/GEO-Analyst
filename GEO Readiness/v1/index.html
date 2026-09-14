@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEO Analyst — AI Discovery Diagnostic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=8">
+</head>
+<body>
+  <div id="app">
+    <!-- Screen 1: Landing -->
+    <div id="screen-landing" class="screen active">
+      <div class="landing-container">
+        <div class="landing-content">
+          <div class="logo-area">
+            <div class="logo-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <rect width="36" height="36" rx="10" fill="url(#logoGrad2)"/>
+                <circle cx="16" cy="16" r="6.5" stroke="white" stroke-width="2"/>
+                <path d="M21 21L27 27" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M27.5 7L28.2 9.2L30.4 9.9L28.2 10.6L27.5 12.8L26.8 10.6L24.6 9.9L26.8 9.2L27.5 7Z" fill="white"/>
+                <defs>
+                  <linearGradient id="logoGrad2" x1="0" y1="0" x2="36" y2="36">
+                    <stop stop-color="#60A5FA"/>
+                    <stop offset="1" stop-color="#2563EB"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1 class="product-name">GEO Analyst</h1>
+          </div>
+          <p class="product-tagline">Diagnose how AI-ready your website is across structure, content, and trust signals.</p>
+
+          <div class="input-area">
+            <div class="url-input-wrapper">
+              <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <input type="text" id="url-input" placeholder="Enter website URL to analyze" autocomplete="off" spellcheck="false">
+              <button id="analyze-btn" class="btn-primary" onclick="startAnalysis()">
+                <span>Analyze</span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="example-urls">
+              <span class="example-label">Try:</span>
+              <button class="example-url" onclick="setExample('https://www.samsunglife.com')">samsunglife.com</button>
+              <button class="example-url" onclick="setExample('https://www.kbinsure.co.kr')">kbinsure.co.kr</button>
+            </div>
+          </div>
+
+          <div class="api-key-row">
+            <input type="text" id="api-key-input" placeholder="Gemini API Key" class="api-key-input">
+            <a href="https://aistudio.google.com/apikey" target="_blank" class="api-key-link">Get free key →</a>
+          </div>
+
+          <div class="advanced-toggle" onclick="toggleAdvanced()" style="margin-top: 12px;">
+            <svg id="advanced-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Advanced Options</span>
+          </div>
+          <div id="advanced-options" class="advanced-options">
+            <div class="advanced-grid">
+              <div class="adv-field">
+                <label>Crawl Depth</label>
+                <select>
+                  <option>2 levels (default)</option>
+                  <option>1 level</option>
+                  <option>3 levels</option>
+                </select>
+              </div>
+              <div class="adv-field">
+                <label>Max Pages</label>
+                <select>
+                  <option>30 pages (default)</option>
+                  <option>10 pages</option>
+                  <option>50 pages</option>
+                  <option>100 pages</option>
+                </select>
+              </div>
+              <div class="adv-field">
+                <label>Page Priority</label>
+                <select>
+                  <option>Auto-detect (default)</option>
+                  <option>FAQ / Help pages</option>
+                  <option>Product / Service pages</option>
+                  <option>Blog / Article pages</option>
+                </select>
+              </div>
+              <div class="adv-field">
+                <label>Scope</label>
+                <select>
+                  <option>Same domain only (default)</option>
+                  <option>Include subdomains</option>
+                </select>
+              </div>
+              <div class="adv-checkboxes">
+                <label class="checkbox-label">
+                  <input type="checkbox" checked> Exclude login/auth pages
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox"> Include PDF links
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="landing-footer">
+          <span>GEO Analyst v1.0</span>
+          <span class="dot">·</span>
+          <span>AI Discovery Optimization</span>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Screen 2: Loading -->
+    <div id="screen-loading" class="screen">
+      <div class="loading-container">
+        <div class="loading-header">
+          <div class="loading-logo">
+            <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
+              <rect width="36" height="36" rx="10" fill="url(#logoGrad2)"/>
+              <path d="M10 18C10 13.58 13.58 10 18 10C22.42 10 26 13.58 26 18" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+              <path d="M14 22C14 19.79 15.79 18 18 18C20.21 18 22 19.79 22 22" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="18" cy="26" r="1.5" fill="white"/>
+              <defs>
+                <linearGradient id="logoGrad2" x1="0" y1="0" x2="36" y2="36">
+                  <stop stop-color="#4A9EF5"/>
+                  <stop offset="1" stop-color="#2563EB"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span class="loading-brand">GEO Readiness</span>
+          </div>
+        </div>
+        <div class="loading-body">
+          <div class="loading-main">
+            <p class="analyzing-label">Analyzing</p>
+            <p class="analyzing-url" id="loading-url">https://www.samsunglife.com</p>
+            <div class="progress-area">
+              <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+              </div>
+              <span class="progress-pct" id="progress-pct">0%</span>
+            </div>
+            <div class="steps-list" id="steps-list">
+              <div class="step-item" data-step="0"><span class="step-indicator"></span><span class="step-text">Normalizing URL</span></div>
+              <div class="step-item" data-step="1"><span class="step-indicator"></span><span class="step-text">Fetching homepage</span></div>
+              <div class="step-item" data-step="2"><span class="step-indicator"></span><span class="step-text">Discovering internal links</span></div>
+              <div class="step-item" data-step="3"><span class="step-indicator"></span><span class="step-text">Classifying page types</span></div>
+              <div class="step-item" data-step="4"><span class="step-indicator"></span><span class="step-text">Extracting headings and body text</span></div>
+              <div class="step-item" data-step="5"><span class="step-indicator"></span><span class="step-text">Evaluating semantic IA and URL structure</span></div>
+              <div class="step-item" data-step="6"><span class="step-indicator"></span><span class="step-text">Assessing text sufficiency</span></div>
+              <div class="step-item" data-step="7"><span class="step-indicator"></span><span class="step-text">Detecting E-E-A-T signals</span></div>
+              <div class="step-item" data-step="8"><span class="step-indicator"></span><span class="step-text">Generating GEO Readiness score</span></div>
+              <div class="step-item" data-step="9"><span class="step-indicator"></span><span class="step-text">Analysis complete</span></div>
+            </div>
+          </div>
+          <div class="loading-insights">
+            <h3 class="insights-title">Live Insights</h3>
+            <div class="insights-feed" id="insights-feed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: Dashboard -->
+    <div id="screen-dashboard" class="screen">
+      <nav class="dash-nav">
+        <div class="dash-nav-left">
+          <span class="dash-nav-brand">GEO Readiness</span>
+        </div>
+        <div class="dash-nav-right">
+          <button class="btn-ghost" onclick="showLanding()">New Analysis</button>
+          <button class="btn-outline">Export PDF</button>
+        </div>
+      </nav>
+
+      <div class="dash-content" id="dash-content">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- Page Detail Drawer -->
+    <div id="page-drawer-overlay" class="drawer-overlay" onclick="closeDrawer()"></div>
+    <div id="page-drawer" class="drawer">
+      <div class="drawer-header">
+        <h2 class="drawer-title" id="drawer-title">Page Detail</h2>
+        <button class="drawer-close" onclick="closeDrawer()">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drawer-body" id="drawer-body">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js?v=8"></script>
+  <script src="crawler.js?v=8"></script>
+  <script src="gemini.js?v=8"></script>
+  <script src="app.js?v=8"></script>
+</body>
+</html>
