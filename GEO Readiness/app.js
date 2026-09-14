@@ -166,7 +166,7 @@ function renderCheckGroup(g) {
   const evi = g.captures.length ? `
     <details class="evi">
       <summary>EVIDENCE (${g.captures.length})</summary>
-      <div class="evi-body">${g.captures.map(renderCapture).join('')}</div>
+      <div class="evi-wrap"><div class="evi-body">${g.captures.map(renderCapture).join('')}</div></div>
     </details>` : '';
   return `
     <div class="check-group">
@@ -251,6 +251,48 @@ function renderDashboard(d) {
       Heading quality, the opening answer and citable facts need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T content quality is out of scope and needs a human review.
     </div>`;
 }
+
+// ===== EVIDENCE DISCLOSURE MOTION =====
+// Animates <details class="evi"> open and close; a click mid-animation reverses from the current height.
+const EVI_MS = 280;
+const EVI_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+document.addEventListener('click', e => {
+  const summary = e.target.closest('details.evi > summary');
+  if (!summary) return;
+  const details = summary.parentElement;
+  const wrap = details.querySelector('.evi-wrap');
+  if (!wrap || !wrap.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  e.preventDefault();
+
+  const inner = wrap.firstElementChild;
+  const from = details.open ? wrap.getBoundingClientRect().height : 0;
+  const closing = details.open && !details.classList.contains('closing');
+  details._anims?.forEach(a => a.cancel());
+  wrap.style.overflow = 'hidden';
+  const reset = () => {
+    wrap.style.overflow = '';
+    details._anims?.forEach(a => a.cancel());
+    details._anims = null;
+  };
+
+  if (closing) {
+    details.classList.add('closing');
+    details._anims = [
+      wrap.animate([{ height: `${from}px` }, { height: '0px' }], { duration: EVI_MS * 0.8, easing: EVI_EASE, fill: 'forwards' }),
+      inner.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-4px)' }], { duration: EVI_MS * 0.5, easing: 'ease-out', fill: 'forwards' })
+    ];
+    details._anims[0].onfinish = () => { details.open = false; details.classList.remove('closing'); reset(); };
+  } else {
+    details.classList.remove('closing');
+    details.open = true;
+    const to = inner.getBoundingClientRect().height;
+    details._anims = [
+      wrap.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: EVI_MS, easing: EVI_EASE, fill: 'forwards' }),
+      inner.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: EVI_MS, delay: 40, easing: EVI_EASE, fill: 'backwards' })
+    ];
+    details._anims[0].onfinish = reset;
+  }
+});
 
 // ===== BOOT =====
 document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') startAnalysis(); });
