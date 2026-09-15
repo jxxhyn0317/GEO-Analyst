@@ -3,6 +3,16 @@
 // count; Gemini only rules on the items that need reading comprehension, and writes
 // the diagnosis text. Scores stay on the same bands, so the result remains checkable.
 
+// A failure the app can explain to the user; `code` keys into ERROR_COPY in app.js.
+class AuditError extends Error {
+  constructor(code, detail = '', extra = {}) {
+    super(code);
+    this.code = code;
+    this.detail = detail;
+    Object.assign(this, extra);
+  }
+}
+
 const JUDGE = (() => {
   const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
   const MODEL = 'gemini-2.5-flash';
@@ -81,24 +91,29 @@ ${JSON.stringify(input)}`;
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(TIMEOUT_MS),
         body
-      }).catch(e => { throw new Error(e.name === 'TimeoutError' ? 'Gemini did not answer within 90 seconds' : 'Could not reach Gemini'); });
+      }).catch(e => { throw new AuditError(e.name === 'TimeoutError' ? 'GEMINI_TIMEOUT' : 'GEMINI_NETWORK', e.message); });
       if (resp.status !== 429 || attempt === 1) break;
       let wait = 20;
-      try { const e = await resp.json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = Math.min(30, Math.max(5, parseInt(r.retryDelay, 10) || 20)); } catch {}
-      if (note) note(`Gemini rate limit; retrying in ${wait}s`, 'yellow');
+      try { const e = await resp.clone().json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = Math.min(30, Math.max(5, parseInt(r.retryDelay, 10) || 20)); } catch {}
+      if (note) note(`Gemini is busy, trying again in ${wait}s`, 'yellow');
       await new Promise(r => setTimeout(r, wait * 1000));
     }
-    if (resp.status === 429) throw new Error('Gemini rate limit reached. Wait a minute and try again');
-    if (resp.status === 400 || resp.status === 403) {
-      let msg = '';
-      try { msg = (await resp.json()).error?.message || ''; } catch {}
-      throw new Error(/api key/i.test(msg) ? 'Gemini rejected the API key' : `Gemini request refused (${resp.status})`);
+    if (!resp.ok) {
+      let err = {};
+      try { err = (await resp.json()).error || {}; } catch {}
+      const msg = `${err.status || ''} ${err.message || ''} ${JSON.stringify(err.details || '')}`;
+      const detail = `HTTP ${resp.status}${err.status ? ' ' + err.status : ''}`;
+      if (/API_KEY_INVALID|api key not valid|API key expired/i.test(msg)) throw new AuditError('KEY_INVALID', detail);
+      if (resp.status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(msg)) throw new AuditError('QUOTA', detail);
+      if (resp.status === 403) throw new AuditError('KEY_PERMISSION', detail);
+      if (resp.status >= 500) throw new AuditError('GEMINI_BUSY', detail);
+      throw new AuditError('GEMINI_OTHER', detail);
     }
-    if (!resp.ok) throw new Error(`Gemini error ${resp.status}`);
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('');
-    if (!text) throw new Error(`Gemini returned no content (${data.candidates?.[0]?.finishReason || 'unknown'})`);
-    return JSON.parse(text);
+    if (!text) throw new AuditError('GEMINI_BLOCKED', data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'no content');
+    try { return JSON.parse(text); }
+    catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
   }
 
   return { judge, MODEL };
