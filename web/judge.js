@@ -23,24 +23,65 @@ const JUDGE = (() => {
     openai: { name: 'OpenAI', vendor: 'OpenAI', console: 'the OpenAI dashboard', models: ['gpt-5-mini', 'gpt-5', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o'] }
   };
   const LABELS = [[/^gemini/, 'Gemini'], [/^claude-fable/, 'Fable'], [/^claude-opus/, 'Opus'], [/^claude-sonnet/, 'Sonnet'], [/^claude-haiku/, 'Haiku'], [/^gpt-5/, 'GPT-5'], [/^gpt-4\.1/, 'GPT-4.1'], [/^gpt-4o/, 'GPT-4o']];
-  let active = { provider: 'gemini', model: 'gemini-2.5-flash' };
+  // The model this key settled on last time, so a reload does not fall back to a guess.
+  const MODEL_STORE = 'geoa_model';
+  const readModel = () => { try { return localStorage.getItem(MODEL_STORE) || ''; } catch { return ''; } };
+  const storeModel = m => { try { m ? localStorage.setItem(MODEL_STORE, m) : localStorage.removeItem(MODEL_STORE); } catch {} };
+  let active = { provider: 'gemini', model: readModel() || 'gemini-2.5-flash' };
 
-  // Google retires model names, so never trust a hard-coded one: ask the key what it can run.
-  // Keeps only the flash family that supports generateContent, newest first, lite last.
+  // What a key may run is not a fixed list: Google adds, renames and retires models, and two
+  // keys made minutes apart can differ. So nothing is insisted on by name. Everything the key
+  // can actually call is kept and ranked, best first, and a name we have never seen still ranks.
+  // Anything that cannot take a page of text and answer in JSON is dropped.
+  const NOT_TEXT = /embedding|aqa|imagen|veo|image-generation|-tts|native-audio|audio-dialog|live-|learnlm|gemma/i;
+  function rankModel(n) {
+    if (/^gemini-[\d.]+-flash$/.test(n)) return 0;            // the everyday one
+    if (/^gemini-[\d.]+-flash-lite$/.test(n)) return 1;
+    if (/flash/.test(n) && !/preview|exp/i.test(n)) return 2;  // dated or -latest builds
+    if (/flash/.test(n)) return 3;                             // preview builds
+    if (/^gemini-[\d.]+-pro$/.test(n)) return 4;              // slower and dearer, but it works
+    if (/pro/.test(n)) return 5;
+    return 6;
+  }
+  const verOf = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
   async function geminiModels(key) {
-    const resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key.trim())}`, { timeout: 10000 });
+    const resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(key.trim())}`, { timeout: 10000 });
     if (!resp.ok) throw failure(await errorOf(resp));
     let models = [];
     try { models = (await resp.json()).models || []; } catch {}
-    const ver = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
     return models
       .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map(m => String(m.name || '').replace(/^models\//, ''))
-      .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n))
-      .sort((a, b) => (/lite/.test(a) - /lite/.test(b)) || ver(b) - ver(a));
+      .filter(n => n && !NOT_TEXT.test(n))
+      .sort((a, b) => rankModel(a) - rankModel(b) || verOf(b) - verOf(a) || a.localeCompare(b));
   }
-  // The tested model if the key still has it, otherwise the newest one it does have.
-  const pickGemini = ids => PROVIDERS.gemini.models.find(m => ids.includes(m)) || ids[0] || null;
+
+  // A model can be listed and still refuse the call, which is how a fresh key ended up connected
+  // and then failing on every analysis. So the chosen model is called once, for a few tokens, in
+  // the shape the real run uses. Only the model's own refusal moves to the next candidate: being
+  // busy or over a limit is not the model's fault, and the key is accepted.
+  const PROBE_SCHEMA = { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' } }, required: ['ok'] };
+  async function firstWorking(key, ids) {
+    let last = 'MODEL_MISSING';
+    for (const id of ids.slice(0, 4)) {
+      active.model = id;
+      let resp;
+      try {
+        resp = await request(endpoint(key), {
+          method: 'POST', headers: headersFor(key), timeout: 15000,
+          body: JSON.stringify({ contents: [{ parts: [{ text: 'Answer {"ok":true}' }] }],
+            generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: PROBE_SCHEMA, maxOutputTokens: 32 } })
+        });
+      } catch { return { ok: true, model: id }; }   // network trouble says nothing about the model
+      if (resp.ok) return { ok: true, model: id };
+      const err = await errorOf(resp);
+      const code = failure(err).code;
+      if (code === 'KEY_INVALID' || code === 'KEY_PERMISSION') return { ok: false, code };
+      if (code === 'MODEL_MISSING' || code === 'GEMINI_OTHER') { last = code; continue; }
+      return { ok: true, model: id };              // busy or over the limit: the key itself is fine
+    }
+    return { ok: false, code: last };
+  }
 
   function detect(key) {
     const k = String(key || '').trim();
@@ -208,7 +249,7 @@ ${JSON.stringify(input)}`;
       if (resp.status === 404 && active.provider === 'gemini' && !repicked) {
         repicked = true;
         const next = (await geminiModels(apiKey).catch(() => [])).find(m => m !== active.model);
-        if (next) { active.model = next; continue; }
+        if (next) { active.model = next; storeModel(next); continue; }
       }
       if (resp.status !== 429 || attempt >= 1) break;
       let wait = parseInt(resp.headers.get('retry-after'), 10) || 20;
@@ -291,17 +332,17 @@ ${JSON.stringify(input.page)}`;
     if (active.provider === 'gemini') {
       let ids = [];
       try {
-        const j = await resp.json();
-        const ver = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
-        ids = (j.models || [])
+        ids = ((await resp.json()).models || [])
           .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
           .map(m => String(m.name || '').replace(/^models\//, ''))
-          .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n))
-          .sort((a, b) => (/lite/.test(a) - /lite/.test(b)) || ver(b) - ver(a));
+          .filter(n => n && !NOT_TEXT.test(n))
+          .sort((a, b) => rankModel(a) - rankModel(b) || verOf(b) - verOf(a) || a.localeCompare(b));
       } catch {}
-      const pick = pickGemini(ids);
-      if (!pick) return { ok: false, code: 'KEY_PERMISSION' };
-      active = { provider: 'gemini', model: pick };
+      if (!ids.length) return { ok: false, code: 'KEY_PERMISSION' };
+      const pick = await firstWorking(key, ids);
+      if (!pick.ok) { storeModel(''); return { ok: false, code: pick.code }; }
+      active = { provider: 'gemini', model: pick.model };
+      storeModel(pick.model);
     } else {
       let ids = [];
       try { ids = ((await resp.json()).data || []).map(m => m.id); } catch {}
