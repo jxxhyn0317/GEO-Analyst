@@ -910,21 +910,24 @@ function openSoonPanel(mode) {
   }
   panel.querySelector('.sp-cta').focus({ preventScroll: true });
 }
-function closeSoonPanel(goPlatform = false) {
+function closeSoonPanel() {
   const panel = soonEl();
   if (panel.hidden) return;
+  const anims = [];
   let finished = false;
   const finish = () => {
     if (finished) return;
     finished = true;
+    // The fade out is held, so clear it here: otherwise the dialog reopens at nothing.
+    anims.forEach(a => a.cancel());
     panel.hidden = true;
     document.activeElement?.blur();
-    if (goPlatform) setMode('platform');
   };
   if (reducedMotion() || !panel.animate) { finish(); return; }
-  panel.querySelector('.key-modal-backdrop').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
-  const a = panel.querySelector('.key-modal-card').animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(0.98)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
-  a.onfinish = finish;
+  anims.push(panel.querySelector('.key-modal-backdrop').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' }));
+  anims.push(panel.querySelector('.key-modal-card').animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(0.98)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' }));
+  anims[1].onfinish = finish;
+  // Animations pause in background tabs; complete the step regardless.
   setTimeout(finish, 350);
 }
 
