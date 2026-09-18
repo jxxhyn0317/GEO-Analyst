@@ -26,6 +26,13 @@ const GEO = (() => {
   const FAQ_HEADING = /\b(faqs?|frequently asked|common questions|questions and answers|q\s?&\s?a)\b|자주\s?묻는|질문과\s?답변|자주하는/i;
   const RELATED = /related|recommend|you may also|more (articles|guides|stories|tips)|see also|further reading|keep reading|explore more|관련|추천/i;
   const DEFER_LINK = /^(learn more|read more|see more|more|find out more|details|view more|자세히 보기|더보기|자세히)$/i;
+  const REVIEW_TYPES = /^(Review|AggregateRating|UserReview|CriticReview)$/;
+  const RATING_TEXT = /★|☆|\b[1-5](\.\d)?\s*(\/\s*5|out of 5|stars?)\b|\b\d[\d,]*\s*(reviews|ratings)\b|평점|별점|리뷰\s*\d|후기\s*\d/i;
+  const AUTHOR_TEXT = /^(by|written by|reviewed by|medically reviewed by|fact[- ]checked by|author|posted by|edited by)\s*[:|]?\s*[A-Z][\w.'’-]+(\s+[A-Z][\w.'’-]+){0,3}|^(글|작성자|기자|에디터|저자|감수|필자)\s*[:|]?\s*[가-힣]{2,5}/;
+  const DATE_TEXT = /(updated|published|last (updated|reviewed|modified)|posted( on)?|reviewed on|작성일|등록일|수정일|업데이트|게시일|최종 수정)\s*[:.]?\s*.{0,14}?(\d{4}[.\-/년]\s?\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d{1,2},? \d{4}|\d{1,2} (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{4})/i;
+  const SOURCE_TEXT = /(^|\s)(sources?|references?|citations?|출처|참고\s?자료|참고\s?문헌)\s*[:：]|\baccording to (the |a )?[A-Z]/;
+  const SOCIAL_HOST = /(^|\.)(facebook|fb|twitter|x|instagram|linkedin|youtube|youtu|pinterest|tiktok|kakao|band|line|whatsapp|t|reddit|threads|weibo|vk)\.(com|me|us|be|co|net|kr)$|(^|\.)naver\.me$|^apps\.apple\.com$|^play\.google\.com$/i;
+  const EXPERIENCE = /\b(we tested|we test|we measured|our tests?|in (our )?testing|tested (by|in|on)|hands-on|in our lab|our lab|lab tests?|test results?|our engineers?|our experts?|certified|licensed|board-certified|years of experience|case stud(y|ies)|customer stor(y|ies)|we found|our research|research (center|centre|institute))\b|직접 (사용|테스트|측정|실험)|테스트 결과|실험 결과|시험 결과|연구소|전문가|엔지니어|자격증|년 경력|실제 사례/i;
 
   // ---------- helpers ----------
   const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -393,8 +400,8 @@ const GEO = (() => {
     const deferLinks = [...doc.querySelectorAll('a[href]')].filter(a => !isChrome(a) && DEFER_LINK.test(squash(a.textContent))).length;
     const imgs = [...doc.querySelectorAll('img')].filter(i => !isChrome(i)).length;
     const longest = substantive.slice().sort((a, b) => b.text.length - a.text.length)[0];
-    const d3c = bandGroup('C. Body Text Volume', 20, [[6000, 20], [3000, 10], [1000, 5], [1, 3], [0, 0]], substantiveChars,
-      'Substantive text chars: 6,000+ = 20 · 3,000 to 5,999 = 10 · 1,000 to 2,999 = 5 · 1 to 999 = 3 · none = 0',
+    const d3c = bandGroup('C. Body Text Volume', 10, [[6000, 10], [3000, 6], [1000, 3], [1, 1], [0, 0]], substantiveChars,
+      'Substantive text chars: 6,000+ = 10 · 3,000 to 5,999 = 6 · 1,000 to 2,999 = 3 · 1 to 999 = 1 · none = 0',
       `${fmt(substantiveChars)} chars in ${substantive.length} text blocks of 40+ chars (raw HTML, navigation and footer excluded)`,
       'Move the key explanations into this page as text', {
         good: code('The longest text block on the page.', `substantive text: ${ok(fmt(substantiveChars) + ' chars')}\n${ok(quote(longest?.text || ''))}`),
@@ -402,8 +409,8 @@ const GEO = (() => {
       });
 
     const pairs = qa.pairs;
-    const d3d = bandGroup('D. Question Coverage (Q&A pairs)', 20, [[10, 20], [4, 15], [1, 5], [0, 0]], pairs.length,
-      'Q&A pairs: 10+ = 20 · 4 to 9 = 15 · 1 to 3 = 5 · 0 = 0',
+    const d3d = bandGroup('D. Question Coverage (Q&A pairs)', 15, [[10, 15], [4, 10], [1, 4], [0, 0]], pairs.length,
+      'Q&A pairs: 10+ = 15 · 4 to 9 = 10 · 1 to 3 = 4 · 0 = 0',
       `${pairs.length} pair${pairs.length === 1 ? '' : 's'}${qa.schemaPairs ? ` (${qa.schemaPairs} in FAQPage markup)` : ''}`,
       'Answer 6 to 10 real user questions in Q&A form', {
         good: code('Question and answer pairs found.', ok(pairs.slice(0, 3).map(p => `Q  ${esc(clip(p.q, 90))}\nA  ${esc(clip(p.a, 90))}`).join('\n'))),
@@ -467,13 +474,67 @@ const GEO = (() => {
       ].filter(Boolean).join('\n'))
     });
 
+    // ===== D3 E-E-A-T signals: counted from the HTML; first-hand experience is judged by Gemini =====
+    const nameOf = v => { const x = Array.isArray(v) ? v[0] : v; return squash(typeof x === 'string' ? x : x && typeof x === 'object' && typeof x.name === 'string' ? x.name : ''); };
+    const reviewEnt = schema.entities.find(e => e.types.some(t => REVIEW_TYPES.test(t))) || schema.entities.find(e => e.node.aggregateRating || e.node.review);
+    const ratingNode = reviewEnt && [].concat(reviewEnt.types.includes('AggregateRating') ? reviewEnt.node : reviewEnt.node.aggregateRating || [])[0];
+    const reviewEl = [...doc.querySelectorAll('[class*="review" i], [id*="review" i], [class*="rating" i], [class*="testimonial" i], [itemprop="review" i], [itemprop="aggregateRating" i]')]
+      .find(el => el.tagName !== 'SCRIPT' && !isChrome(el) && !el.closest('a, button, form') && (squash(el.textContent).length >= 80 || RATING_TEXT.test(squash(el.textContent))));
+    const reviews = reviewEnt
+      ? (ratingNode && ratingNode.ratingValue ? `rating ${ratingNode.ratingValue}${ratingNode.reviewCount || ratingNode.ratingCount ? ` from ${ratingNode.reviewCount || ratingNode.ratingCount} reviews` : ''} in structured data` : `${reviewEnt.types[0]} in structured data`)
+      : reviewEl ? `review block "${clip(squash(reviewEl.textContent), 50)}"` : '';
+    const schemaAuthor = schema.entities.map(e => nameOf(e.node.author) || nameOf(e.node.reviewedBy)).find(Boolean) || '';
+    const authorEl = [...doc.querySelectorAll('[itemprop="author" i], [rel~="author" i], [class*="author" i], [class*="byline" i], [class*="writer" i], [class*="reporter" i]')]
+      .find(el => el.tagName !== 'SCRIPT' && !isChrome(el) && squash(el.textContent).length >= 2 && squash(el.textContent).length <= 80);
+    const authorLine = bodyBlocks.find(b => b.text.length <= 120 && AUTHOR_TEXT.test(b.text));
+    const author = schemaAuthor || squash(doc.querySelector('meta[name="author" i]')?.getAttribute('content')) || (authorEl ? squash(authorEl.textContent) : '') || (authorLine ? authorLine.text : '');
+    const schemaDate = schema.entities.map(e => prop(e.node, 'dateModified') || prop(e.node, 'datePublished')).find(v => typeof v === 'string') || '';
+    const metaDate = doc.querySelector('meta[property="article:modified_time" i], meta[property="article:published_time" i], meta[name="date" i], meta[itemprop="dateModified" i], meta[itemprop="datePublished" i]')?.getAttribute('content') || '';
+    const timeEl = [...doc.querySelectorAll('time')].find(t => !isChrome(t) && (t.getAttribute('datetime') || /\d{4}/.test(t.textContent)));
+    const dateLine = bodyBlocks.find(b => b.text.length <= 200 && DATE_TEXT.test(b.text));
+    const pageDate = schemaDate ? `${schemaDate.slice(0, 10)} in structured data`
+      : metaDate ? `${metaDate.slice(0, 10)} in meta tags`
+      : timeEl ? `${clip(squash(timeEl.getAttribute('datetime') || timeEl.textContent), 25)} in a time element`
+      : dateLine ? `"${clip(dateLine.text.match(DATE_TEXT)[0], 40)}"` : '';
+    const outside = [...new Set([...doc.querySelectorAll('a[href]')].filter(a => !isChrome(a)).map(a => {
+      try {
+        const x = new URL(a.getAttribute('href'), url);
+        if (!/^https?:$/.test(x.protocol)) return null;
+        const hn = x.hostname.replace(/^www\./, '');
+        const own = hn === host || hn.endsWith('.' + host) || host.endsWith('.' + hn);
+        return own || SOCIAL_HOST.test(hn) ? null : hn;
+      } catch { return null; }
+    }).filter(Boolean))];
+    const citeCount = doc.querySelectorAll('cite, blockquote[cite], q[cite]').length;
+    const sourceLine = bodyBlocks.find(b => SOURCE_TEXT.test(b.text));
+    const sources = outside.length ? outside : citeCount ? [`${citeCount} citation element${citeCount > 1 ? 's' : ''}`] : sourceLine ? [`"${clip(sourceLine.text, 40)}"`] : [];
+    const expSentences = uniqSentences.filter(s => EXPERIENCE.test(s)).slice(0, 12);
+    const eeat = { reviews, author: clip(author, 80), date: pageDate, sources };
+    const d3e = eeatGroup(eeat, expSentences, 'heuristic');
+
+    const crumbs = crumbEl ? [...crumbEl.querySelectorAll('a[href]')].map(a => {
+      try { return { name: squash(a.textContent), url: new URL(a.getAttribute('href'), url).href }; } catch { return null; }
+    }).filter((c, i, a) => c && c.name && c.name.length < 60 && a.findIndex(x => x && x.name === c.name) === i) : [];
+    if (crumbs.length && normUrl(crumbs[crumbs.length - 1].url) !== normUrl(url.href)) crumbs.push({ name: h1?.text || title, url: url.href });
+
     const measure = {
       url: url.href, title, h1: h1?.text || '', metaDesc, introText, opening,
       headings: labelSet.map((h, i) => ({ id: i, level: h.level, text: h.text })),
-      sentences: [...facts.slice(0, 40), ...qualifiers.slice(0, 30), ...uniqSentences.filter(s => !facts.includes(s) && !qualifiers.includes(s)).slice(0, 50)]
+      sentences: [...new Set([...expSentences, ...facts.slice(0, 40), ...qualifiers.slice(0, 30), ...uniqSentences.filter(s => !facts.includes(s) && !qualifiers.includes(s)).slice(0, 50)])]
         .map((s, i) => ({ id: i, text: clip(s, 300) })),
       substantiveChars, rawBytes: fetched.bytes || html.length,
-      jsHeavy: substantiveChars < 400 && doc.querySelectorAll('script').length > 10
+      jsHeavy: substantiveChars < 400 && doc.querySelectorAll('script').length > 10,
+      // Inputs for the suggested fixes: the page's own values, never invented ones.
+      siteName: squash(doc.querySelector('meta[property="og:site_name" i]')?.getAttribute('content')) || nameOf(findEntity(schema, ORG_TYPES)?.node.name),
+      ogImage: doc.querySelector('meta[property="og:image" i]')?.getAttribute('content') || '',
+      lang: (doc.documentElement.getAttribute('lang') || '').slice(0, 10),
+      author: eeat.author,
+      crumbs,
+      missingSchema: { organization: !org, pageEntity: !pageEnt, breadcrumb: !crumb, webpage: !webpage, faq: !faqType },
+      schemaTypes: typeList.slice(0, 16),
+      qaPairs: pairs.slice(0, 8).map(p => ({ q: clip(p.q, 200), a: clip(p.a, 400) })),
+      weakHeadings: informative.filter(x => !x.ok).map(x => x.h.text).slice(0, 8),
+      weakSentences: qualifiers.slice(0, 6).map(s => clip(s, 240))
     };
 
     const result = {
@@ -483,11 +544,12 @@ const GEO = (() => {
       redirects: fetched.redirects || [],
       title,
       measure,
-      judged: { headings: 'heuristic', opening: openingAnswers.source, facts: 'heuristic' },
+      eeat,
+      judged: { headings: 'heuristic', opening: openingAnswers.source, facts: 'heuristic', experience: 'heuristic' },
       dimensions: [
         dim('01', 'URL & Page Context', 'd1', [d1a, d1b, d1c]),
         dim('02', 'Page Structure', 'd2', [d2a, d2b, d2c, d2d, d2e]),
-        dim('03', 'Answerability & Content Depth', 'd3', [d3a, d3b, d3c, d3d]),
+        dim('03', 'Answerability & Content Depth', 'd3', [d3a, d3b, d3c, d3d, d3e]),
         dim('04', 'Schema Markup', 'd4', [d4a, d4b, d4c, d4d])
       ],
       qualifierSamples: qualifiers.slice(0, 5)
@@ -538,13 +600,40 @@ const GEO = (() => {
   }
 
   function factsBand(facts, qualifiers, source) {
-    return bandGroup('B. Extractable Facts in Text', 30, [[15, 30], [8, 20], [3, 10], [1, 5], [0, 0]], facts.length,
-      'Numeric or spec statements in HTML text: 15+ = 30 · 8 to 14 = 20 · 3 to 7 = 10 · 1 to 2 = 5 · none = 0',
+    return bandGroup('B. Extractable Facts in Text', 25, [[15, 25], [8, 17], [3, 8], [1, 4], [0, 0]], facts.length,
+      'Numeric or spec statements in HTML text: 15+ = 25 · 8 to 14 = 17 · 3 to 7 = 8 · 1 to 2 = 4 · none = 0',
       `${facts.length} statement${facts.length === 1 ? '' : 's'} with a number, unit or spec; ${qualifiers.length} qualifier sentence${qualifiers.length === 1 ? '' : 's'} without one`,
       'Replace qualifiers with the number behind them', {
         good: code('Statements an engine can cite as facts.', `<span class="ok">${facts.slice(0, 3).map(quote).join('\n')}</span>`),
         bad: code('Qualifier sentences standing where a number could be.', qualifiers.length ? `<span class="hl">${qualifiers.slice(0, 3).map(quote).join('\n')}</span>` : `numeric statements: <span class="hl">${facts.length}</span>`)
       }, { judged: source });
+  }
+
+  // Experience, expertise, authority and trust signals an engine can see in the HTML.
+  function eeatGroup(sig, exp, source) {
+    const found = [
+      sig.reviews && `reviews     ${esc(sig.reviews)}`,
+      sig.author && `author      ${esc(clip(sig.author, 70))}`,
+      sig.date && `date        ${esc(sig.date)}`,
+      sig.sources.length && `sources     ${esc(clip(sig.sources.slice(0, 4).join(', '), 90))}`,
+      exp.length && `first-hand  ${quote(exp[0])}`
+    ].filter(Boolean);
+    const missing = [
+      !sig.reviews && 'reviews or ratings', !sig.author && 'author byline', !sig.date && 'published or updated date',
+      !sig.sources.length && 'outside sources', !exp.length && 'first-hand experience'
+    ].filter(Boolean);
+    const g = checkGroup('E. E-E-A-T Signals', [
+      check(!!sig.reviews, 4, 'Reviews, ratings or testimonials', sig.reviews || 'none found', 'Show real customer reviews or ratings, and mark them up with Review'),
+      check(!!sig.author, 4, 'Named author or expert byline', sig.author ? `"${clip(sig.author, 40)}"` : 'none found', 'Add a byline naming the author or expert reviewer'),
+      check(!!sig.date, 4, 'Published or updated date', sig.date || 'none found', 'Show when the page was published or last updated'),
+      check(sig.sources.length > 0, 4, 'Cites outside sources', sig.sources.length ? clip(sig.sources.slice(0, 3).join(', '), 60) : 'none found', 'Link the standards, studies or data behind key claims'),
+      check(exp.length > 0, 4, 'First-hand experience or expertise shown', exp.length ? `${exp.length} statement${exp.length === 1 ? '' : 's'}` : 'none found', 'Show your own test results, expert credentials or real cases')
+    ], {
+      good: code('E-E-A-T signals found on the page.', `<span class="ok">${found.join('\n')}</span>`),
+      bad: code('E-E-A-T signals that are missing.', missing.map(x => `${esc(x)}: <span class="hl">0</span>`).join('\n'))
+    });
+    g.checks[4].judged = source;
+    return g;
   }
 
   function firstSentences(text, n) {
@@ -659,6 +748,7 @@ const GEO = (() => {
       const i = d2.breakdown.findIndex(g => g.name.startsWith('C.'));
       d2.breakdown[i] = headingBand(list, 'gemini');
       r.judged.headings = 'gemini';
+      r.measure.weakHeadings = list.filter(x => !x.ok).map(x => x.h.text).slice(0, 8);
     }
     if (typeof j.openingAnswers === 'boolean') {
       const c = d3.breakdown[0].checks[1];
@@ -676,6 +766,13 @@ const GEO = (() => {
       const i = d3.breakdown.findIndex(g => g.name.startsWith('B.'));
       d3.breakdown[i] = factsBand(facts, quals.length ? quals : r.qualifierSamples, 'gemini');
       r.judged.facts = 'gemini';
+      r.measure.weakSentences = (quals.length ? quals : r.qualifierSamples).slice(0, 6);
+    }
+    if (Array.isArray(j.experienceIds) && r.eeat) {
+      const byId = new Map(r.measure.sentences.map(s => [s.id, s.text]));
+      const exp = j.experienceIds.map(id => byId.get(id)).filter(Boolean);
+      const i = d3.breakdown.findIndex(g => g.name.startsWith('E.'));
+      if (i >= 0) { d3.breakdown[i] = eeatGroup(r.eeat, exp, 'gemini'); r.judged.experience = 'gemini'; }
     }
     finalize(r);
     const t = r.templates;

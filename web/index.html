@@ -3,19 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GEO Analyst · Technical GEO Audit</title>
-  <meta name="description" content="Technical GEO audit of a single page: URL context, page structure, answerability and schema markup, scored on a verifiable checklist.">
+  <title>GEO Analyst</title>
+  <meta name="description" content="Technical GEO analysis of a single page: URL context, page structure, answerability and schema markup, scored on a verifiable checklist.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=4">
+  <link rel="stylesheet" href="v2.css?v=41">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <linearGradient id="geoaGlyph" x1="4" y1="3" x2="32" y2="33" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#3B82F6"/>
+        <stop offset="0.5" stop-color="#2563EB"/>
+        <stop offset="1" stop-color="#1D4ED8"/>
+      </linearGradient>
+      <linearGradient id="aiSpark" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
         <stop stop-color="#3B82F6"/>
         <stop offset="0.5" stop-color="#2563EB"/>
         <stop offset="1" stop-color="#1D4ED8"/>
@@ -34,12 +39,12 @@
     <div id="screen-landing" class="screen active">
       <div class="landing-container">
         <div class="landing-content">
-          <div class="logo-area">
+          <a class="logo-area" href="./" title="Reload GEO Analyst">
             <div class="logo-icon">
               <svg class="geoa-mark" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             </div>
             <h1 class="product-name">GEO Analyst</h1>
-          </div>
+          </a>
           <p class="product-tagline">Diagnose how AI-ready your platform is across URL structure, page structure, answerability and schema markup, scored on a checklist you can verify.</p>
 
           <div class="input-area">
@@ -48,21 +53,49 @@
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <input type="text" id="url-input" placeholder="Paste the full URL of the page to audit" autocomplete="off" spellcheck="false">
+              <input type="text" id="url-input" placeholder="Paste the full URL of the page to analyze" autocomplete="off" spellcheck="false">
               <button id="analyze-btn" class="btn-primary" onclick="startAnalysis()">
                 <span>Analyze</span>
               </button>
             </div>
-          </div>
-
-          <div class="api-key-row">
-            <input type="password" id="api-key-input" placeholder="Gemini API Key" class="api-key-input" autocomplete="off">
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="api-key-link">Get free key →</a>
+            <p class="key-connected" id="key-connected" hidden>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="key-connected-label">Gemini key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change" onclick="changeKey()">Change</button>
+            </p>
           </div>
         </div>
         <footer class="landing-footer">
           <a href="v1/" title="Open the previous version (v1)">GEO Analyst v2.0</a>
+          <p class="landing-copyright">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</p>
         </footer>
+      </div>
+      <div class="key-modal" id="key-panel" data-state="empty" hidden>
+        <div class="key-modal-backdrop" onclick="dismissKeyPanel()"></div>
+        <div class="key-modal-card" role="dialog" aria-modal="true" aria-labelledby="kp-title" aria-describedby="kp-sub">
+          <button type="button" class="kp-close" aria-label="Close" onclick="dismissKeyPanel()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <div class="kp-badge" aria-hidden="true">
+            <svg class="kp-ico-key" width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M10.85 12.15 19 4M16 7l2 2M13.5 9.5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="kp-ico-ok" width="44" height="44" viewBox="0 0 44 44" fill="none"><circle class="kp-ok-fill" cx="22" cy="22" r="20" fill="#16A34A"/><path class="kp-ok-check" d="M13.5 22.5l5.5 5.5 11.5-12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h2 class="kp-title" id="kp-title">Enter API key to continue</h2>
+          <p class="kp-sub" id="kp-sub">GEO Analyst reads the page with your Gemini API key. It stays in this browser.</p>
+          <div class="api-key-row kp-row">
+            <input type="password" id="api-key-input" class="api-key-input" placeholder="Gemini API Key" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Gemini API key" aria-describedby="key-msg">
+            <button type="button" class="btn-primary kp-continue" id="kp-continue" onclick="connectKey()" disabled><span class="kp-spin" aria-hidden="true"></span><svg class="kp-btn-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="kp-btn-label">Paste a key</span></button>
+          </div>
+          <p class="kp-msg" id="key-msg" aria-live="polite"></p>
+          <button type="button" class="api-key-link kp-help-btn" id="kp-help-btn" aria-expanded="false" aria-controls="kp-steps" onclick="toggleKeySteps()">Don’t have one?</button>
+          <div class="kp-steps" id="kp-steps" hidden>
+            <ol>
+              <li><a class="kp-cta" id="kp-cta" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" onclick="keyTripStarted()">Open Google AI Studio<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4 2.5h5.5V8M9.5 2.5 3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a> and sign in with a Google account.</li>
+              <li>Select <b>Create API key</b>, then copy the key.</li>
+              <li>Paste it above. It connects right away.</li>
+            </ol>
+          </div>
+          <button type="button" class="kp-cancel" onclick="cancelKeyChange()">Keep the current key</button>
+        </div>
       </div>
     </div>
 
@@ -70,9 +103,10 @@
     <div id="screen-loading" class="screen">
       <div class="loading-container">
         <div class="loading-header">
-          <div class="loading-logo">
-            <svg class="geoa-mark" width="28" height="28" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
-            <span class="loading-brand">GEO Readiness</span>
+          <div class="loading-logo app-brand">
+            <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
+            <span class="loading-brand app-brand-name">GEO Analyst</span>
+            <span class="app-brand-copy">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</span>
           </div>
         </div>
         <div class="loading-body">
@@ -107,20 +141,24 @@
     <!-- Screen 3: Dashboard -->
     <div id="screen-dashboard" class="screen">
       <nav class="dash-nav">
-        <div class="dash-nav-left">
-          <span class="dash-nav-brand">GEO Readiness</span>
+        <div class="dash-nav-left app-brand">
+          <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
+          <span class="dash-nav-brand app-brand-name">GEO Analyst</span>
+          <span class="app-brand-copy">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</span>
         </div>
         <div class="dash-nav-right">
           <button class="btn-ghost" onclick="showLanding()">New Analysis</button>
-          <button class="btn-outline" onclick="window.print()">Export PDF</button>
+          <button class="btn-outline" id="export-pdf-btn" onclick="exportPdf(this)">Export PDF</button>
         </div>
       </nav>
       <div class="dash-content" id="dash-content"></div>
     </div>
   </div>
 
-  <script src="engine.js?v=1"></script>
-  <script src="judge.js?v=2"></script>
-  <script src="app.js?v=11"></script>
+  <script src="engine.js?v=3"></script>
+  <script src="judge.js?v=5"></script>
+  <script src="fixes.js?v=8"></script>
+  <script src="pdf.js?v=3"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

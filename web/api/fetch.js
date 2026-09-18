@@ -22,27 +22,27 @@ const CHAIN_CODES = new Set(['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_I
 // AI crawlers would likely hit the same wall (which makes it a GEO finding too).
 const FAIL = {
   BAD_URL: { status: 400, title: 'That is not a valid page URL', hint: 'Paste the full address, for example https://example.com/page.' },
-  BAD_SCHEME: { status: 400, title: 'Only http and https pages can be audited', hint: 'Use the web address of the page, not a file or app link.' },
-  PRIVATE: { status: 400, title: 'Local and private network addresses cannot be audited', hint: 'Use a page that is reachable on the public internet.' },
+  BAD_SCHEME: { status: 400, title: 'Only http and https pages can be analyzed', hint: 'Use the web address of the page, not a file or app link.' },
+  PRIVATE: { status: 400, title: 'Local and private network addresses cannot be analyzed', hint: 'Use a page that is reachable on the public internet.' },
   DNS: { status: 502, title: 'This domain could not be found', hint: 'Check the address for typos. A brand-new domain may not be live yet.' },
   REFUSED: { status: 502, title: 'The site refused the connection', hint: 'The server may be down or open only to certain networks. Try again later.' },
   RESET: { status: 502, title: 'The site cut off the connection', hint: 'It may block automated or data-center traffic. If this repeats, AI crawlers are likely blocked too.', crawler: true },
-  TIMEOUT: { status: 504, title: 'The site did not respond within 20 seconds', hint: 'The server is slow or unreachable from the audit server. Try again later.', crawler: true },
+  TIMEOUT: { status: 504, title: 'The site did not respond within 20 seconds', hint: 'The server is slow or unreachable from the analysis server. Try again later.', crawler: true },
   CERT_EXPIRED: { status: 502, title: "The site's security certificate has expired", hint: 'Browsers show a warning and crawlers skip the page. The site owner needs to renew the certificate.', crawler: true },
   CERT_SELF_SIGNED: { status: 502, title: "The site's certificate is not issued by a trusted authority", hint: 'Crawlers reject self-signed certificates. The site needs a certificate from a public certificate authority.', crawler: true },
   CERT_HOST: { status: 502, title: 'The security certificate does not match this domain', hint: 'The certificate was issued for a different address. Check the URL, or ask the site owner to fix the certificate.', crawler: true },
   CERT_CHAIN: { status: 502, title: "The site's certificate chain is incomplete", hint: 'The server does not send its intermediate certificate and it could not be recovered. Browsers may still open the page, but most crawlers cannot. The site owner needs to install the full chain.', crawler: true },
   TLS_OTHER: { status: 502, title: 'A secure connection to the site could not be established', hint: "The site's HTTPS setup is not accepted by standard clients.", crawler: true },
   REDIRECTS: { status: 502, title: 'The page redirects too many times', hint: 'It may be stuck in a redirect loop. Open it in a browser to see where it ends up.' },
-  HTTP_401: { status: 200, title: 'The page requires a login', hint: 'Only public pages can be audited.' },
+  HTTP_401: { status: 200, title: 'The page requires a login', hint: 'Only public pages can be analyzed.' },
   HTTP_403: { status: 200, title: 'The site refused automated access (HTTP 403)', hint: 'It blocks bots or data-center traffic. AI crawlers are probably blocked as well, which is a GEO problem in itself.', crawler: true },
-  HTTP_404: { status: 200, title: 'The page was not found (HTTP 404)', hint: 'Check the URL, or audit the page it moved to.' },
-  HTTP_410: { status: 200, title: 'The page has been removed (HTTP 410)', hint: 'Audit the page that replaced it.' },
+  HTTP_404: { status: 200, title: 'The page was not found (HTTP 404)', hint: 'Check the URL, or analyze the page it moved to.' },
+  HTTP_410: { status: 200, title: 'The page has been removed (HTTP 410)', hint: 'Analyze the page that replaced it.' },
   HTTP_429: { status: 200, title: 'The site is limiting requests (HTTP 429)', hint: 'Wait a minute and try again.' },
-  HTTP_451: { status: 200, title: 'The site blocks visitors from the audit server region (HTTP 451)', hint: 'Most AI crawlers run from the same regions, so they are likely blocked too.', crawler: true },
+  HTTP_451: { status: 200, title: 'The site blocks visitors from the analysis server region (HTTP 451)', hint: 'Most AI crawlers run from the same regions, so they are likely blocked too.', crawler: true },
   HTTP_5XX: { status: 200, title: "The site's server returned an error", hint: 'The problem is on the site. Try again later.' },
   HTTP_OTHER: { status: 200, title: 'The site answered with an unexpected status', hint: 'Open the page in a browser to check that it loads.' },
-  NOT_HTML: { status: 200, title: 'This URL is not a web page', hint: 'It returns a file instead of HTML. Audit the page that links to it.' },
+  NOT_HTML: { status: 200, title: 'This URL is not a web page', hint: 'It returns a file instead of HTML. Analyze the page that links to it.' },
   EMPTY: { status: 200, title: 'The page returned no content', hint: 'The server sent an empty response. Try again, or check the page in a browser.' },
   FORBIDDEN_ORIGIN: { status: 403, title: 'This endpoint only serves the GEO Analyst app', hint: '' },
   UNKNOWN: { status: 502, title: 'The site could not be reached', hint: 'Try again. If it keeps failing, open the page in a browser to check that it loads.' }
@@ -253,7 +253,7 @@ module.exports = async function handler(req, res) {
         try { r = await httpsGet(u, extraCa); } catch (e2) { throw classifyNetwork(e2); }
         warnings.push({
           code: 'TLS_CHAIN_INCOMPLETE',
-          text: `${u.hostname} does not send its intermediate security certificate. The audit recovered it to read the page, but many crawlers and HTTP clients reject the connection instead, so AI engines may never see this page. The site owner should install the full certificate chain.`
+          text: `${u.hostname} does not send its intermediate security certificate. The analysis recovered it to read the page, but many crawlers and HTTP clients reject the connection instead, so AI engines may never see this page. The site owner should install the full certificate chain.`
         });
       }
       const loc = r.header('location');

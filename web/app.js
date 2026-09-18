@@ -25,48 +25,51 @@ function startAnalysis() {
   const input = document.getElementById('url-input');
   const url = normalizeInputUrl(input.value);
   if (!url) { input.focus(); return; }
-  const keyInput = document.getElementById('api-key-input');
-  const apiKey = keyInput.value.trim();
-  if (!apiKey) {
-    keyInput.focus();
-    keyInput.classList.add('input-error');
-    keyInput.setAttribute('placeholder', 'Gemini API key required');
-    setTimeout(() => { keyInput.classList.remove('input-error'); keyInput.setAttribute('placeholder', 'Gemini API Key'); }, 3000);
+  if (keyState !== 'ok') {
+    continueAfterKey = startAnalysis;
+    openKeyPanel({ nudge: true });
     return;
   }
-  storeKey(apiKey);
+  const apiKey = readStoredKey();
   history.replaceState(null, '', `?url=${encodeURIComponent(url)}`);
   document.getElementById('loading-url').textContent = url;
   showScreen('screen-loading');
   runAnalysis(url, apiKey);
 }
 
-async function runAnalysis(url, apiKey) {
+// ===== LOADING SCREEN =====
+function resetLoading() {
+  document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active', 'done'));
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-pct').textContent = '0%';
+  document.getElementById('insights-feed').innerHTML = '';
+}
+function progress(i) {
   const steps = document.querySelectorAll('.step-item');
-  const fill = document.getElementById('progress-fill');
-  const pct = document.getElementById('progress-pct');
+  steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); });
+  const p = Math.round(((i + 1) / steps.length) * 100);
+  document.getElementById('progress-fill').style.width = p + '%';
+  document.getElementById('progress-pct').textContent = p + '%';
+}
+function note(text, color = 'blue') {
   const feed = document.getElementById('insights-feed');
-  steps.forEach(s => s.classList.remove('active', 'done'));
-  fill.style.width = '0%';
-  pct.textContent = '0%';
-  feed.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'insight-item insight-enter';
+  div.innerHTML = `<span class="insight-dot ${color}"></span>${GEO.esc(text)}`;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+  requestAnimationFrame(() => div.classList.remove('insight-enter'));
+}
+function finishLoading() {
+  document.querySelectorAll('.step-item').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  document.getElementById('progress-fill').style.width = '100%';
+  document.getElementById('progress-pct').textContent = '100%';
+}
+const tick = () => new Promise(r => setTimeout(r, 260));
 
-  const progress = i => {
-    steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); });
-    const p = Math.round(((i + 1) / steps.length) * 100);
-    fill.style.width = p + '%';
-    pct.textContent = p + '%';
-  };
-  const note = (text, color = 'blue') => {
-    const div = document.createElement('div');
-    div.className = 'insight-item insight-enter';
-    div.innerHTML = `<span class="insight-dot ${color}"></span>${GEO.esc(text)}`;
-    feed.appendChild(div);
-    feed.scrollTop = feed.scrollHeight;
-    requestAnimationFrame(() => div.classList.remove('insight-enter'));
-  };
-  const tick = () => new Promise(r => setTimeout(r, 260));
-
+async function runAnalysis(url, apiKey) {
+  resetLoading();
+  lastAudit = { url, result: null, stage: 'fetch' };
   let stage = 'fetch';
   try {
     progress(0);
@@ -100,21 +103,9 @@ async function runAnalysis(url, apiKey) {
     progress(5); await tick();
     note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
 
-    progress(6);
     stage = 'gemini';
-    note(`Asking ${JUDGE.MODEL} to judge headings, the opening and citable facts`);
-    const t1 = performance.now();
-    const judgment = await JUDGE.judge(apiKey, result, note);
-    GEO.applyJudgment(result, judgment);
-    note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
-
-    progress(7);
-    note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
-    steps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-    fill.style.width = '100%';
-    pct.textContent = '100%';
-    currentData = result;
-    setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); }, 500);
+    lastAudit.result = result;
+    await geminiStage(result, apiKey);
   } catch (err) {
     console.error(err);
     const e = err instanceof AuditError ? err : new AuditError('UNKNOWN', err.message);
@@ -123,14 +114,45 @@ async function runAnalysis(url, apiKey) {
   }
 }
 
+async function geminiStage(result, apiKey) {
+  progress(6);
+  note(`Asking ${JUDGE.MODEL} to judge headings, the opening, citable facts and first-hand experience`);
+  const t1 = performance.now();
+  const judgment = await JUDGE.judge(apiKey, result, note);
+  GEO.applyJudgment(result, judgment);
+  note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
+  progress(7);
+  note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
+  finishLoading();
+  currentData = result;
+  setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); }, 500);
+}
+
+// Re-runs only the Gemini step; the page was already fetched and measured.
+async function resumeGemini() {
+  const { url, result } = lastAudit;
+  document.getElementById('loading-url').textContent = url;
+  showScreen('screen-loading');
+  resetLoading();
+  progress(5);
+  note('Page measurements kept from the last run', 'green');
+  try {
+    await geminiStage(result, readStoredKey());
+  } catch (err) {
+    const e = err instanceof AuditError ? err : new AuditError('UNKNOWN', err.message);
+    note(copyFor(e).title, 'red');
+    setTimeout(() => renderError(url, e, 'gemini'), 900);
+  }
+}
+
 // ===== ERROR COPY =====
 // Plain-language copy for every failure: what happened, why, what the user can do,
 // and what the tool cannot do. Technical codes stay in the collapsed details.
-const GEO_WALL = 'AI search engines visit pages much like this audit does. If we cannot open the page, they most likely cannot either, so it will not appear in AI answers until this is fixed.';
+const GEO_WALL = 'AI search engines visit pages much like this analysis does. If we cannot open the page, they most likely cannot either, so it will not appear in AI answers until this is fixed.';
 const ERROR_COPY = {
   BAD_URL: { title: 'This doesn’t look like a web address', body: 'Check that the full address is there, starting with https://.', action: 'edit' },
-  BAD_SCHEME: { title: 'We can only open web pages', body: 'Addresses that start with http:// or https:// work. Files and app links can’t be audited.', action: 'edit' },
-  PRIVATE: { title: 'This page is on a private network', body: 'We audit pages anyone can open on the internet, the same way AI search engines see them. Internal or company-network pages can’t be checked.', action: 'edit' },
+  BAD_SCHEME: { title: 'We can only open web pages', body: 'Addresses that start with http:// or https:// work. Files and app links can’t be analyzed.', action: 'edit' },
+  PRIVATE: { title: 'This page is on a private network', body: 'We analyze pages anyone can open on the internet, the same way AI search engines see them. Internal or company-network pages can’t be checked.', action: 'edit' },
   DNS: { title: 'We couldn’t find this website', body: 'The address may have a typo, or the domain may not be live yet.', tips: ['Check the spelling of the address.', 'Open it in your browser to make sure it loads.'], action: 'edit' },
   REFUSED: { title: 'The website isn’t accepting visitors right now', body: 'Its server may be down, or open only to certain networks.', tips: ['Try again in a few minutes.'], action: 'retry' },
   RESET: { title: 'The website ended the connection', body: 'Some sites turn away automated visits partway through.', tips: ['Try again. If it keeps happening, the site is likely blocking automated visitors.'], geo: true, action: 'retry' },
@@ -140,20 +162,20 @@ const ERROR_COPY = {
   CERT_HOST: { title: 'The security certificate belongs to another address', body: 'The site shows a certificate made for a different domain, so the connection can’t be trusted.', tips: ['Check the address. If it’s correct, let the site owner know.'], geo: true, action: 'edit' },
   CERT_CHAIN: { title: 'This website’s security setup is incomplete', body: 'Part of its security certificate is missing. Browsers fill the gap on their own, but most AI search engines don’t.', tips: ['Ask the site owner to install the full certificate chain.'], geo: true, action: 'edit' },
   TLS_OTHER: { title: 'We couldn’t open a secure connection', body: 'The site’s HTTPS settings aren’t accepted by standard tools.', tips: ['Let the site owner know their HTTPS setup needs a check.'], geo: true, action: 'edit' },
-  REDIRECTS: { title: 'This page keeps redirecting', body: 'It sends visitors from one address to another in a loop.', tips: ['Open it in your browser to see where it ends up, then audit that address.'], action: 'edit' },
-  HTTP_401: { title: 'This page needs a login', body: 'We can only audit pages anyone can see without signing in, the same pages AI search engines can read.', action: 'edit' },
+  REDIRECTS: { title: 'This page keeps redirecting', body: 'It sends visitors from one address to another in a loop.', tips: ['Open it in your browser to see where it ends up, then analyze that address.'], action: 'edit' },
+  HTTP_401: { title: 'This page needs a login', body: 'We can only analyze pages anyone can see without signing in, the same pages AI search engines can read.', action: 'edit' },
   HTTP_403: { title: 'This website blocked our visit', body: 'It turns away automated visitors.', tips: ['If this is your site, check its bot and firewall settings.'], geo: true, action: 'edit' },
-  HTTP_404: { title: 'We couldn’t find this page', body: 'It may have moved or been deleted.', tips: ['Check the address, or audit the page it moved to.'], action: 'edit' },
-  HTTP_410: { title: 'This page has been removed', body: 'The site says it’s gone for good.', tips: ['Audit the page that replaced it.'], action: 'edit' },
+  HTTP_404: { title: 'We couldn’t find this page', body: 'It may have moved or been deleted.', tips: ['Check the address, or analyze the page it moved to.'], action: 'edit' },
+  HTTP_410: { title: 'This page has been removed', body: 'The site says it’s gone for good.', tips: ['Analyze the page that replaced it.'], action: 'edit' },
   HTTP_429: { title: 'The website asked us to slow down', body: 'It received too many requests in a short time.', tips: ['Wait a minute, then try again.'], action: 'retry' },
-  HTTP_451: { title: 'This website isn’t available in our server’s region', body: 'It limits visitors by location, and our audit server runs in the United States, where many AI search engines also run.', geo: true, action: 'edit' },
+  HTTP_451: { title: 'This website isn’t available in our server’s region', body: 'It limits visitors by location, and our analysis server runs in the United States, where many AI search engines also run.', geo: true, action: 'edit' },
   HTTP_5XX: { title: 'The website is having trouble right now', body: 'Its server returned an error. This is on the site’s side.', tips: ['Try again in a few minutes.'], action: 'retry' },
   HTTP_OTHER: { title: 'The website sent an unexpected response', body: 'We didn’t receive the page we expected.', tips: ['Open it in your browser to make sure it loads.'], action: 'retry' },
-  NOT_HTML: { title: 'This address opens a file, not a web page', body: 'We audit web pages written in HTML.', tips: ['Audit the page that links to this file instead.'], action: 'edit' },
+  NOT_HTML: { title: 'This address opens a file, not a web page', body: 'We analyze web pages written in HTML.', tips: ['Analyze the page that links to this file instead.'], action: 'edit' },
   EMPTY: { title: 'The page came back empty', body: 'The website sent no content.', tips: ['Try again, or open it in your browser to check.'], action: 'retry' },
   UNKNOWN: { title: 'We couldn’t open this page', body: 'Something went wrong while connecting to the website.', tips: ['Try again. If it keeps failing, check that the page opens in your browser.'], action: 'retry' },
-  NETWORK: { title: 'You seem to be offline', body: 'We couldn’t reach the audit service.', tips: ['Check your internet connection, then try again.'], action: 'retry' },
-  SERVICE: { title: 'Our audit service isn’t responding', body: 'This is a problem on our side, not yours.', tips: ['Try again in a moment.'], action: 'retry' },
+  NETWORK: { title: 'You seem to be offline', body: 'We couldn’t reach the analysis service.', tips: ['Check your internet connection, then try again.'], action: 'retry' },
+  SERVICE: { title: 'Our analysis service isn’t responding', body: 'This is a problem on our side, not yours.', tips: ['Try again in a moment.'], action: 'retry' },
   PARSE: { title: 'We couldn’t read this page’s content', body: 'The page opened, but its HTML couldn’t be analyzed.', tips: ['Try again, or try another page.'], action: 'retry' },
   KEY_INVALID: { title: 'This Gemini API key doesn’t work', body: 'Google didn’t accept the key. It may have a typo, or it may have been deleted.', tips: ['Copy the key again from Google AI Studio and paste it in.'], action: 'key' },
   KEY_PERMISSION: { title: 'This key can’t use Gemini yet', body: 'The Gemini API isn’t turned on for the project this key belongs to.', tips: ['Create a new key in Google AI Studio. New keys work right away.'], action: 'key' },
@@ -168,18 +190,23 @@ const ERROR_COPY = {
 const WARNING_COPY = {
   TLS_CHAIN_INCOMPLETE: {
     short: 'Security certificate incomplete; recovered it to continue',
-    text: 'This site’s security setup is incomplete: part of its certificate is missing. We filled the gap to run this audit, but most AI search engines won’t, so they may not be able to open this page at all. Ask the site owner to install the full certificate chain.'
+    text: 'This site’s security setup is incomplete: part of its certificate is missing. We filled the gap to run this analysis, but most AI search engines won’t, so they may not be able to open this page at all. Ask the site owner to install the full certificate chain.'
   }
 };
 const STAGE_LABEL = { fetch: 'Opening the page', read: 'Reading the page', gemini: 'Asking Gemini' };
 const ACTION_LABEL = { retry: 'Try again', edit: 'Change the address', key: 'Change the API key' };
-let lastAudit = { url: '' };
+let lastAudit = { url: '', result: null, stage: '' };
 
 function copyFor(e) { return ERROR_COPY[e.code] || ERROR_COPY.UNKNOWN; }
 
 function renderError(url, e, stage) {
   const c = copyFor(e);
-  lastAudit = { url };
+  lastAudit.url = url;
+  lastAudit.stage = stage;
+  if (e.code === 'KEY_INVALID' || e.code === 'KEY_PERMISSION') {
+    storeKeyOk(false);
+    setKeyUi('error', KEY_STATUS_COPY[e.code]);
+  }
   const geo = c.geo || e.crawlerImpact;
   showScreen('screen-dashboard');
   document.getElementById('dash-content').innerHTML = `
@@ -190,10 +217,11 @@ function renderError(url, e, stage) {
       <h2 class="err-title">${c.title}</h2>
       <p class="err-body">${c.body}</p>
       ${c.tips?.length ? `<ul class="err-tips">${c.tips.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
+      ${stage === 'gemini' && c.action === 'retry' && lastAudit.result ? '<p class="err-keep">Your page is already measured, so only the Gemini step will run again.</p>' : ''}
       ${geo ? `<div class="err-geo"><b>Why this matters for GEO</b><p>${GEO_WALL}</p></div>` : ''}
       <div class="err-actions">
         <button class="btn-primary err-btn" onclick="errorAction('${c.action}')">${ACTION_LABEL[c.action]}</button>
-        ${c.action !== 'edit' ? `<button class="btn-ghost err-btn" onclick="errorAction('edit')">Audit another page</button>` : ''}
+        ${c.action !== 'edit' ? `<button class="btn-ghost err-btn" onclick="errorAction('edit')">Analyze another page</button>` : ''}
       </div>
       <p class="err-url">${GEO.esc(url)}</p>
       <details class="err-tech">
@@ -205,13 +233,16 @@ function renderError(url, e, stage) {
 
 function errorAction(action) {
   const urlInput = document.getElementById('url-input');
-  const keyInput = document.getElementById('api-key-input');
   urlInput.value = lastAudit.url;
-  if (action === 'retry') { startAnalysis(); return; }
+  if (action === 'retry') {
+    if (lastAudit.stage === 'gemini' && lastAudit.result) resumeGemini();
+    else startAnalysis();
+    return;
+  }
+  if (action === 'key') { openKeyStep(); return; }
   showLanding();
-  const target = action === 'key' ? keyInput : urlInput;
-  target.focus();
-  target.select();
+  urlInput.focus();
+  urlInput.select();
 }
 
 // ===== DASHBOARD =====
@@ -234,7 +265,7 @@ function scoreRingSVG(score, size = 100, stroke = 8) {
 }
 
 function renderCapture(c) {
-  const badge = c.tone === 'good' ? '<span class="cap-badge good">WELL DONE</span>' : '<span class="cap-badge bad">PENALIZED</span>';
+  const badge = c.tone === 'good' ? '<span class="cap-badge good">WELL DONE</span>' : '<span class="cap-badge bad">WEAK</span>';
   return `<div class="cap cap-${c.tone}"><div class="cap-head">${badge}<span class="cap-caption">${c.caption}</span></div><pre>${c.code}</pre></div>`;
 }
 
@@ -274,7 +305,7 @@ function renderDashboard(d) {
   const notices = [
     ...(d.fetchWarnings || []).map(w => `<div class="notice warn">${WARNING_COPY[w.code]?.text || GEO.esc(w.text)}</div>`),
     d.measure.jsHeavy && `<div class="notice warn">The raw HTML carries very little text (${d.measure.substantiveChars.toLocaleString('en-US')} chars). The page most likely renders its content with JavaScript, which AI crawlers that do not run scripts never see. The scores below reflect that crawler view.</div>`,
-    d.redirects.length && `<div class="notice info">The requested URL redirected; the audit measures the final page.</div>`
+    d.redirects.length && `<div class="notice info">The requested URL redirected; the analysis measures the final page.</div>`
   ].filter(Boolean).join('');
 
   document.getElementById('dash-content').innerHTML = `
@@ -289,7 +320,7 @@ function renderDashboard(d) {
           <div class="hero-score-label">GEO Readiness</div>
         </div>
         <div class="hero-meta hero-meta-right">
-          <div class="hero-url-label">Audited URL</div>
+          <div class="hero-url-label">Analyzed URL</div>
           <a class="hero-url-link" href="${GEO.esc(d.url)}" target="_blank" rel="noopener" title="${GEO.esc(d.url)}">${GEO.esc(d.url)}</a>
           <div class="hero-timestamp">Analyzed ${GEO.esc(when)} · single page, raw HTML</div>
         </div>
@@ -326,19 +357,17 @@ function renderDashboard(d) {
               <div class="breakdown-header"><span class="breakdown-label">SCORING BREAKDOWN</span></div>
               ${dim.breakdown.map(renderCheckGroup).join('')}
             </div>
-            <div class="todo-box">
-              <div class="todo-label">WHAT TO DO</div>
-              <ol>${pd.todo.map(x => `<li>${GEO.esc(x)}</li>`).join('')}</ol>
-            </div>
+            <div class="ai-box" id="ai-${dim.key}"></div>
           </div>`;
       }).join('')}
     </div>
 
     <div class="method-box">
-      <b>How this audit works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
-      Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one penalized example, a zero group shows the penalized evidence only.
-      Heading quality, the opening answer and citable facts need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T content quality is out of scope and needs a human review.
+      <b>How this analysis works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
+      Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one weak example, a zero group shows the weak evidence only.
+      Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.
     </div>`;
+  FIXES.init(d);
 }
 
 // ===== EVIDENCE DISCLOSURE MOTION =====
@@ -383,13 +412,301 @@ document.addEventListener('click', e => {
   }
 });
 
-// ===== BOOT =====
-document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') startAnalysis(); });
-document.getElementById('api-key-input').value = readStoredKey();
-(() => {
-  const q = new URLSearchParams(location.search).get('url');
-  if (q) {
-    document.getElementById('url-input').value = q;
-    if (readStoredKey()) startAnalysis();
+// ===== GEMINI KEY =====
+// No audit can run without a Gemini key, so the key comes first: the first touch on the URL
+// field opens a dialog over a blurred landing. Once the key is confirmed the dialog closes,
+// and an audit that was already requested continues on its own.
+const KEY_OK_STORE = 'geoa_key_ok';
+const KEY_STATUS_COPY = {
+  checking: 'Checking your key with Google…',
+  ok: 'Connected. Starting the analysis…',
+  nudge: 'Enter your API key to run the analysis.',
+  KEY_INVALID: 'This key doesn’t work. Try copying it again.',
+  KEY_PERMISSION: 'This key can’t use Gemini yet. Create a new one in Google AI Studio.',
+  QUOTA: 'This key has reached its limit for now. Try again in a minute.',
+  GEMINI_NETWORK: 'We couldn’t check the key. Check your connection, then try again.',
+  GEMINI_TIMEOUT: 'Checking took too long. Try again.',
+  other: 'We couldn’t check this key. Try again.'
+};
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+let keyState = 'empty';
+let keyCheck = null;
+let continueAfterKey = null;
+let awaitingKeyTrip = false;
+const panelEl = () => document.getElementById('key-panel');
+const cardEl = () => panelEl().querySelector('.key-modal-card');
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function readKeyOk() { try { return localStorage.getItem(KEY_OK_STORE) === '1'; } catch { return false; } }
+function storeKeyOk(v) { try { v ? localStorage.setItem(KEY_OK_STORE, '1') : localStorage.removeItem(KEY_OK_STORE); } catch {} }
+
+function syncConnected() {
+  document.getElementById('key-connected').hidden = !(keyState === 'ok' && panelEl().hidden);
+}
+
+function setKeyUi(state, message = '') {
+  const prev = keyState;
+  keyState = state;
+  const panel = panelEl();
+  const input = document.getElementById('api-key-input');
+  // The key is checked automatically, so the button reports state rather than asking for a click.
+  const btn = document.getElementById('kp-continue');
+  const hasKey = !!input.value.trim();
+  const label = { empty: hasKey ? 'Check key' : 'Paste a key', checking: 'Checking…', error: 'Key not valid', ok: 'Connected' };
+  // Every state change glides: the card eases to its new height while changed text rolls in.
+  morphHeight(cardEl(), () => {
+    panel.dataset.state = state;
+    input.classList.toggle('input-error', state === 'error');
+    swapText(document.getElementById('key-msg'), message || (state === 'checking' ? KEY_STATUS_COPY.checking : ''));
+    btn.disabled = state !== 'empty' || !hasKey;
+    swapText(btn.querySelector('.kp-btn-label'), label[state] || 'Check key');
+  });
+  if (state === 'error' && prev !== 'error') nudge(panel.querySelector('.kp-row'));
+  syncConnected();
+}
+
+function openKeyPanel({ changing = false, nudge = false } = {}) {
+  if (!document.getElementById('screen-landing').classList.contains('active')) showLanding();
+  const panel = panelEl();
+  panel.dataset.changing = changing ? '1' : '';
+  swapText(document.getElementById('kp-title'), changing ? 'Change your API key' : 'Enter API key to continue');
+  if (panel.hidden) {
+    panel.hidden = false;
+    if (!reducedMotion() && panel.animate) {
+      panel.querySelector('.key-modal-backdrop').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+      cardEl().animate([{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: EASE });
+    }
   }
+  if (changing) setKeyUi(keyState, 'Your current key works. Paste a new one to replace it.');
+  else if (nudge && keyState === 'empty') setKeyUi('empty', KEY_STATUS_COPY.nudge);
+  syncConnected();
+  const input = document.getElementById('api-key-input');
+  input.focus({ preventScroll: true });
+  input.select();
+}
+
+function closeKeyPanel(then) {
+  const panel = panelEl();
+  if (panel.hidden) { if (then) then(); return; }
+  const anims = [];
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    anims.forEach(a => a.cancel());
+    panel.hidden = true;
+    panel.dataset.changing = '';
+    settleMorph(cardEl());
+    setStepsOpen(false);
+    syncConnected();
+    if (then) then();
+  };
+  if (reducedMotion() || !panel.animate) { finish(); return; }
+  anims.push(panel.querySelector('.key-modal-backdrop').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' }));
+  anims.push(cardEl().animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(0.98)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' }));
+  anims[1].onfinish = finish;
+  // Animations pause in background tabs; complete the step regardless.
+  setTimeout(finish, 350);
+}
+
+// Closing without a key is allowed; the next attempt to audit opens the dialog again.
+function dismissKeyPanel() {
+  continueAfterKey = null;
+  awaitingKeyTrip = false;
+  if (keyState === 'ok') document.getElementById('api-key-input').value = readStoredKey();
+  // Focusing the URL field would reopen the dialog, so leave focus on the page itself.
+  closeKeyPanel(() => document.activeElement?.blur());
+}
+
+// No motion for reduced-motion users, old browsers, or anything not on screen.
+function quietMotion(el) { return reducedMotion() || !el.animate || !!el.closest('[hidden]'); }
+
+// Replaces an element's text and lets the new text rise into place.
+function swapText(el, text) {
+  if (el.textContent === text) return;
+  el.textContent = text;
+  if (!text || quietMotion(el)) return;
+  el.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE });
+}
+
+// A small sideways settle marks a rejected key without alarm.
+function nudge(el) {
+  if (quietMotion(el)) return;
+  el.animate([{ transform: 'none' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(-1.5px)' }, { transform: 'none' }], { duration: 360, easing: 'ease-out' });
+}
+
+// Animates an element's height across a DOM change. A change that lands mid-animation
+// continues from the current height instead of snapping.
+function morphHeight(el, change) {
+  const from = el.offsetHeight;
+  settleMorph(el);
+  change();
+  const to = el.offsetHeight;
+  if (from !== to && !quietMotion(el)) startMorph(el, from, to);
+}
+
+function startMorph(el, from, to, after = null) {
+  const anim = el.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 280, easing: EASE });
+  el._morph = anim;
+  el._afterMorph = after;
+  el.style.overflow = 'hidden';
+  const done = () => { if (el._morph === anim) settleMorph(el); };
+  anim.onfinish = done;
+  // Animations pause in background tabs; settle regardless.
+  setTimeout(done, 600);
+}
+
+function settleMorph(el) {
+  const anim = el._morph;
+  const after = el._afterMorph;
+  el._morph = el._afterMorph = null;
+  if (anim) { anim.cancel(); el.style.overflow = ''; }
+  if (after) after();
+}
+
+function setStepsOpen(open) {
+  document.getElementById('kp-steps').hidden = !open;
+  const btn = document.getElementById('kp-help-btn');
+  btn.setAttribute('aria-expanded', String(open));
+  swapText(btn, open ? 'Hide steps' : 'Don’t have one?');
+}
+
+// "Don't have one?" reveals the step-by-step guide only for people who ask for it.
+// Opening slides the steps in as the card grows; closing lets the card close over them as they fade.
+function toggleKeySteps() {
+  const card = cardEl();
+  const steps = document.getElementById('kp-steps');
+  const stepsOpen = () => document.getElementById('kp-help-btn').getAttribute('aria-expanded') === 'true';
+  if (!stepsOpen()) {
+    morphHeight(card, () => setStepsOpen(true));
+    if (!quietMotion(steps)) steps.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 280, delay: 40, easing: EASE, fill: 'backwards' });
+    return;
+  }
+  const from = card.offsetHeight;
+  settleMorph(card);
+  setStepsOpen(false);
+  const to = card.offsetHeight;
+  if (from === to || quietMotion(card)) return;
+  steps.hidden = false;
+  const fade = steps.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out', fill: 'forwards' });
+  startMorph(card, from, to, () => { fade.cancel(); steps.hidden = !stepsOpen(); });
+}
+
+function keyTripStarted() { awaitingKeyTrip = true; }
+
+function returnedFromKeyTrip() {
+  if (!awaitingKeyTrip || panelEl().hidden || keyState === 'ok') return;
+  awaitingKeyTrip = false;
+  setKeyUi(keyState === 'error' ? 'error' : 'empty', 'Welcome back. Paste your key here.');
+  document.getElementById('api-key-input').focus({ preventScroll: true });
+}
+
+function connectKey() {
+  const input = document.getElementById('api-key-input');
+  if (!input.value.trim()) { setKeyUi('error', 'Paste your API key first.'); input.focus(); return; }
+  checkKey(input.value);
+}
+
+async function checkKey(raw, { silent = false } = {}) {
+  const key = raw.trim();
+  if (!key) { setKeyUi('empty'); return false; }
+  if (!silent) setKeyUi('checking');
+  const run = keyCheck = JUDGE.verifyKey(key);
+  const res = await run;
+  if (run !== keyCheck) return false;
+  keyCheck = null;
+  if (res.ok) {
+    storeKey(key);
+    storeKeyOk(true);
+    if (silent) {
+      setKeyUi('ok');
+      if (!panelEl().hidden && panelEl().dataset.changing !== '1') closeKeyPanel();
+      return true;
+    }
+    const next = continueAfterKey;
+    continueAfterKey = null;
+    swapText(document.getElementById('kp-title'), 'API key connected');
+    setKeyUi('ok', next ? 'Starting the analysis…' : 'You’re all set. Paste a page URL to analyze.');
+    // Leave right after the success mark finishes (about 0.7s) so there is no idle pause.
+    setTimeout(() => closeKeyPanel(() => {
+      if (next) next();
+      else document.getElementById('url-input').focus({ preventScroll: true });
+    }), 950);
+    return true;
+  }
+  if (silent && (res.code === 'GEMINI_NETWORK' || res.code === 'GEMINI_TIMEOUT')) return keyState === 'ok';
+  storeKeyOk(false);
+  const stale = silent && (res.code === 'KEY_INVALID' || res.code === 'KEY_PERMISSION');
+  setKeyUi('error', stale ? 'Your saved key no longer works. Paste a new one.' : (KEY_STATUS_COPY[res.code] || KEY_STATUS_COPY.other));
+  return false;
+}
+
+// From the error screen: fix the key, then pick up where the audit stopped.
+function openKeyStep() {
+  continueAfterKey = lastAudit.stage === 'gemini' && lastAudit.result ? resumeGemini : startAnalysis;
+  openKeyPanel();
+}
+
+function changeKey() {
+  continueAfterKey = null;
+  openKeyPanel({ changing: true });
+}
+
+function cancelKeyChange() {
+  document.getElementById('api-key-input').value = readStoredKey();
+  if (readKeyOk()) setKeyUi('ok');
+  closeKeyPanel(() => document.getElementById('url-input').focus({ preventScroll: true }));
+}
+
+// Keeps keyboard focus inside the dialog while it is open.
+function onDialogKey(e) {
+  if (e.key === 'Escape') { dismissKeyPanel(); return; }
+  if (e.key !== 'Tab') return;
+  const items = [...cardEl().querySelectorAll('button, input, a[href]')].filter(el => !el.disabled && el.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+// ===== BOOT =====
+(() => {
+  const urlInput = document.getElementById('url-input');
+  const keyInput = document.getElementById('api-key-input');
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) startAnalysis(); });
+  urlInput.addEventListener('pointerdown', e => {
+    if (keyState === 'ok') return;
+    e.preventDefault();
+    openKeyPanel();
+  });
+  urlInput.addEventListener('focus', () => { if (keyState !== 'ok') openKeyPanel(); });
+  panelEl().addEventListener('keydown', onDialogKey);
+
+  let keyTimer = null;
+  let pasted = false;
+  keyInput.addEventListener('paste', () => { pasted = true; });
+  keyInput.addEventListener('input', () => {
+    clearTimeout(keyTimer);
+    const v = keyInput.value.trim();
+    if (!v) { keyCheck = null; setKeyUi('empty'); return; }
+    if (pasted) { pasted = false; checkKey(v); return; }
+    setKeyUi('empty');
+    keyTimer = setTimeout(() => checkKey(keyInput.value), 900);
+  });
+  keyInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) { clearTimeout(keyTimer); connectKey(); }
+  });
+  window.addEventListener('focus', returnedFromKeyTrip);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) returnedFromKeyTrip(); });
+
+  const stored = readStoredKey();
+  const q = new URLSearchParams(location.search).get('url');
+  keyInput.value = stored;
+  if (q) urlInput.value = q;
+  if (stored && readKeyOk()) {
+    setKeyUi('ok');
+    // A shared ?url= link only auto-runs once the saved key is confirmed again.
+    checkKey(stored, { silent: true }).then(ok => { if (ok && q) startAnalysis(); });
+  } else if (stored) checkKey(stored, { silent: true });
+  else setKeyUi('empty');
 })();
