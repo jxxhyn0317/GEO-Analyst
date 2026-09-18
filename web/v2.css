@@ -116,12 +116,14 @@ body[data-mode="social"] .title-block, body[data-mode="youtube"] .title-block { 
 /* The title is only a reload link, so it stays still: no gradient sweep, glow or scale on hover. */
 #screen-landing .product-name, #screen-landing .product-name:hover { background-position: 0% 50%; filter: none; }
 a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
-.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; }
 .sub-brand.on { opacity: 1; }
 .sub-for { color: var(--gray-900); font-weight: 500; }
 /* Both wordmarks sit in the same box: the outgoing one fades out where it stands while the box
    glides to the new width, so switching types is one movement rather than a swap. */
-.sub-mark { position: relative; display: inline-block; height: 18px; transition: width .34s cubic-bezier(0.22, 1, 0.36, 1); }
+/* The box resizes while the old mark is still fading, on that fade's timing, so "for" has
+   finished stepping across before the new mark starts: it then rises straight up. */
+.sub-mark { position: relative; display: inline-block; height: 18px; transition: width .11s ease-in; }
 .sub-mark > * { position: absolute; left: 0; top: 0; bottom: 0; margin: auto 0; }
 .sub-logo { display: block; }
 /* Stand-in until the official wordmark file is dropped in. */

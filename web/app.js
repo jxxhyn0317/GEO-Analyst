@@ -769,10 +769,14 @@ function setMode(mode) {
 
   // The two lines of copy never share the screen: the old one is gone before the new one
   // arrives, so there is no doubled text and nothing slides under the reader's eye.
-  // The copy and the placeholder move exactly as the wordmark does.
+  // Text travels the way the tabs do: a step to the right arrives from the right. Nine pixels,
+  // so it reads as direction rather than movement, and on the wordmark's timing so the whole
+  // title area settles at once.
+  const dir = nextOnTop ? 1 : -1;
+  const at = x => `translate3d(${x}px, 0, 0)`;
   ['.product-tagline', 'input'].forEach(sel => {
-    prev.querySelector(sel)?.animate(SWAP_FADE, SWAP_OUT);
-    next.querySelector(sel)?.animate(SWAP_RISE, SWAP_IN);
+    prev.querySelector(sel)?.animate([{ opacity: 1, transform: at(0) }, { opacity: 0, transform: at(-9 * dir) }], SWAP_OUT);
+    next.querySelector(sel)?.animate([{ opacity: 0, transform: at(9 * dir) }, { opacity: 1, transform: at(0) }], SWAP_IN);
   });
 
   // The button is one pill throughout: both copies take the same width, and the one underneath
@@ -798,15 +802,20 @@ function setMode(mode) {
 function setSubBrand(mode) {
   const line = document.getElementById('sub-brand');
   const mark = document.getElementById('sub-mark');
+  const word = line.querySelector('.sub-for');
   const brand = TYPE_BRAND[mode];
-  line.classList.toggle('on', !!brand);
   line.setAttribute('aria-hidden', String(!brand));
 
   const old = mark.lastElementChild;
   if (old && old.dataset.mode === mode) return;
-  // On the way out the box keeps its width until the mark has gone, so nothing slides sideways
-  // behind the fade.
-  if (!brand) { fadeMark(old, false, () => { mark.style.width = '0px'; }); return; }
+  // "for" and the mark arrive and leave together, on the same curve: the line itself never fades,
+  // or the word would be there before the logo it belongs to.
+  if (!brand) {
+    fadeWord(word, false, () => line.classList.remove('on'));
+    fadeMark(old, false, () => { markWidth(mark, '0px', false); });
+    return;
+  }
+  if (!old) { line.classList.add('on'); fadeWord(word, true); }
 
   // The files are preloaded, so the new mark is already there as the old one fades out.
   const img = new Image();
@@ -826,11 +835,31 @@ function setSubBrand(mode) {
   mark.appendChild(img);
   // Coming from Platform there is no old width to glide from, so the box takes its size at once
   // and the mark rises straight up instead of drifting in from the right.
-  if (!old) mark.style.transition = 'none';
-  mark.style.width = `${Math.round(brand.height * brand.ratio)}px`;
-  if (!old) { mark.getBoundingClientRect(); mark.style.transition = ''; }
+  markWidth(mark, `${Math.round(brand.height * brand.ratio)}px`, !!old);
   fadeMark(old, false);
   fadeMark(img, true);
+}
+
+// Moves "for" exactly as the mark beside it moves. It stays put between two types: there it only
+// glides sideways as the box changes width.
+function fadeWord(el, show, after) {
+  if (reducedMotion() || !el.animate) { after?.(); return; }
+  // The fade out is held, so clear it before fading back in or the word snaps away at the end.
+  el.getAnimations().forEach(a => a.cancel());
+  const a = el.animate(show ? SWAP_RISE : SWAP_FADE, show ? SWAP_IN : SWAP_OUT);
+  if (!after) return;
+  let done = false;
+  const once = () => { if (!done) { done = true; after(); } };
+  a.onfinish = once;
+  setTimeout(once, 400);
+}
+
+// Sets the wordmark box's width. It glides only when there are two marks to glide between, and
+// then only for as long as the old mark takes to fade, so the new one arrives at a settled spot.
+function markWidth(mark, width, glide) {
+  if (!glide) mark.style.transition = 'none';
+  mark.style.width = width;
+  if (!glide) { mark.getBoundingClientRect(); mark.style.transition = ''; }
 }
 
 // Fades one wordmark in, rising into place, or out and away. The timeout stands in for onfinish
