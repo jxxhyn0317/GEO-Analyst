@@ -894,8 +894,8 @@ function positionModeIndicator(animate = true) {
 // ===== COMING SOON =====
 // Social and YouTube are announced, not open: touching their bar explains what is coming.
 const SOON_COPY = {
-  social: 'The Social audit isn’t open yet. It will check profiles, posts and captions the same way, and your API key will work here too. Platform is ready today.',
-  youtube: 'The YouTube audit isn’t open yet. It will check titles, chapters, descriptions and transcripts the same way, and your API key will work here too. Platform is ready today.'
+  social: 'The Social audit isn’t open yet. It will check profiles, posts and captions the same way, and your API key will work here too.',
+  youtube: 'The YouTube audit isn’t open yet. It will check titles, chapters, descriptions and transcripts the same way, and your API key will work here too.'
 };
 const soonEl = () => document.getElementById('soon-panel');
 function openSoonPanel(mode) {
