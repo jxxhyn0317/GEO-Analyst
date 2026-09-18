@@ -39,7 +39,10 @@ function startAnalysis() {
 // ===== LOADING SCREEN =====
 function resetLoading() {
   document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active', 'done'));
-  document.getElementById('progress-fill').style.width = '0%';
+  const fill = document.getElementById('progress-fill');
+  fill.style.width = '0%';
+  fill.classList.remove('done');
+  document.getElementById('progress-pct')._count?.();
   document.getElementById('progress-pct').textContent = '0%';
   document.getElementById('insights-feed').innerHTML = '';
 }
@@ -48,7 +51,33 @@ let shownPct = 0;
 function setPct(p) {
   shownPct = p;
   document.getElementById('progress-fill').style.width = p + '%';
-  document.getElementById('progress-pct').textContent = Math.round(p) + '%';
+  countTo(document.getElementById('progress-pct'), Math.round(p), v => `${v}%`, 480);
+}
+
+// Counts a figure up to its value instead of snapping to it. Reading the number climb is what
+// makes a measurement feel measured rather than printed.
+function countTo(el, to, fmt = String, ms = 520) {
+  const from = parseFloat((el.textContent || '').replace(/[^\d.-]/g, '')) || 0;
+  el._count?.();
+  if (reducedMotion() || from === to) { el.textContent = fmt(to); return; }
+  const t0 = performance.now();
+  let raf = 0;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / ms);
+    el.textContent = fmt(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) raf = requestAnimationFrame(step);
+    else { el.textContent = fmt(to); el._count = null; }
+  };
+  el._count = () => { cancelAnimationFrame(raf); el._count = null; };
+  raf = requestAnimationFrame(step);
+}
+
+// Counts from nothing up to the figure the element already carries.
+function countFromZero(el, ms) {
+  const to = parseInt(el.textContent, 10);
+  if (!Number.isFinite(to)) return;
+  el.textContent = '0';
+  countTo(el, to, String, ms);
 }
 function progress(i) {
   const steps = document.querySelectorAll('.step-item');
@@ -89,8 +118,10 @@ function note(text, color = 'blue') {
 }
 function finishLoading() {
   document.querySelectorAll('.step-item').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-  document.getElementById('progress-fill').style.width = '100%';
-  document.getElementById('progress-pct').textContent = '100%';
+  const fill = document.getElementById('progress-fill');
+  fill.style.width = '100%';
+  fill.classList.add('done');
+  countTo(document.getElementById('progress-pct'), 100, v => `${v}%`, 420);
 }
 // Pauses between steps so each measured score can be read as it lands.
 const tick = (ms = 850) => new Promise(r => setTimeout(r, ms));
@@ -156,7 +187,7 @@ async function geminiStage(result, apiKey) {
   note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
   finishLoading();
   currentData = result;
-  setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); }, 500);
+  setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); requestAnimationFrame(animateResults); }, 500);
 }
 
 // Re-runs only the Gemini step; the page was already fetched and measured.
@@ -285,15 +316,17 @@ function statusLabelFor(c) { return c === 'green' ? 'Reasonably Prepared' : c ==
 function dimLabelFor(c) { return c === 'green' ? 'Sufficient' : c === 'yellow' ? 'Needs Improvement' : 'Weak'; }
 const HEX = { green: '#22C55E', yellow: '#F59E0B', red: '#EF4444' };
 
-function scoreRingSVG(score, size = 100, stroke = 8) {
+// The band is passed in, not worked out again here: the ring and the figure inside it read from
+// one decision, so they can never end up in different colours.
+function scoreRingSVG(score, size = 100, stroke = 8, band = colorOf(score)) {
   const r = (size - stroke) / 2;
   const c = Math.PI * 2 * r;
-  const color = colorOf(score);
+  const color = band;
   const bg = color === 'green' ? '#DCFCE7' : color === 'yellow' ? '#FEF3C7' : '#FEE2E2';
   return `
     <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${bg}" stroke-width="${stroke}" fill="none"/>
-      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${HEX[color]}" stroke-width="${stroke}" fill="none"
+      <circle class="ring-arc" data-arc="${c * score / 100}" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${HEX[color]}" stroke-width="${stroke}" fill="none"
         stroke-dasharray="${c * score / 100} ${c}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
     </svg>`;
 }
@@ -348,7 +381,7 @@ function renderDashboard(d) {
       <div class="hero-top">
         <div class="hero-score-area">
           <div class="hero-score-ring">
-            ${scoreRingSVG(d.overallScore, 100, 8)}
+            ${scoreRingSVG(d.overallScore, 100, 8, sc)}
             <div class="hero-score-value score-${sc}">${d.overallScore}</div>
           </div>
           <div class="hero-score-label">GEO Readiness</div>
@@ -402,6 +435,41 @@ function renderDashboard(d) {
       Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.
     </div>`;
   FIXES.init(d);
+}
+
+// ===== RESULTS MOTION =====
+// The figures arrive the way they were measured: the ring sweeps round, the gauges fill and the
+// numbers climb. A card below the fold waits until it is on screen, so nothing is missed.
+function animateResults() {
+  const root = document.getElementById('dash-content');
+  if (!root || reducedMotion() || !root.animate) return;
+
+  const ring = root.querySelector('.ring-arc');
+  if (ring) ring.animate([{ strokeDashoffset: +ring.dataset.arc }, { strokeDashoffset: 0 }], { duration: 1100, easing: EASE });
+  const hero = root.querySelector('.hero-score-value');
+  if (hero) countFromZero(hero, 1100);
+
+  const fill = card => {
+    if (card.dataset.filled) return;
+    card.dataset.filled = '1';
+    const num = card.querySelector('.score-card-score .num');
+    if (num) countFromZero(num, 900);
+    card.querySelectorAll('.group-gauge-fill').forEach((g, i) => {
+      g.animate([{ width: '0%' }, { width: g.style.width }], { duration: 760, delay: 80 + i * 70, easing: EASE, fill: 'backwards' });
+    });
+  };
+
+  // Whatever is already on screen starts in this frame; the observer would cost a frame, and the
+  // figure would be read before it climbed.
+  const cards = [...root.querySelectorAll('.score-card')];
+  cards.forEach(c => { const r = c.getBoundingClientRect(); if (r.top < innerHeight * 0.88 && r.bottom > 0) fill(c); });
+  const rest = cards.filter(c => !c.dataset.filled);
+  if (!rest.length) return;
+  if (!window.IntersectionObserver) { rest.forEach(fill); return; }
+  const io = new IntersectionObserver((entries, obs) => {
+    entries.forEach(e => { if (e.isIntersecting) { fill(e.target); obs.unobserve(e.target); } });
+  }, { rootMargin: '0px 0px -12% 0px' });
+  rest.forEach(c => io.observe(c));
 }
 
 // ===== EVIDENCE DISCLOSURE MOTION =====

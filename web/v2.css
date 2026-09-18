@@ -162,6 +162,47 @@ a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
 .soon-bar input::placeholder { color: var(--gray-400); }
 .soon-bar .btn-soon { display: inline-flex; align-items: center; gap: 6px; color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
 .soon-lock { flex: none; opacity: .9; }
+/* ===== LOADING SCREEN MOTION =====
+   The screen is calm and continuous rather than busy: the bar carries a slow sheen so a long
+   model step never looks stalled, the step being worked on breathes instead of blinking, and the
+   list settles in one item at a time. */
+#screen-loading .progress-fill { position: relative; overflow: hidden; transition: width .55s cubic-bezier(0.22, 1, 0.36, 1); }
+#screen-loading .progress-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 18%, rgba(255, 255, 255, 0.55) 50%, transparent 82%);
+  transform: translateX(-100%);
+  animation: sheen 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+/* Once the report is ready the bar stops working and simply rests. */
+#screen-loading .progress-fill.done::after { animation: none; opacity: 0; }
+@keyframes sheen { to { transform: translateX(100%); } }
+
+#screen-loading .step-item.active .step-indicator::after { animation: breathe 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.68); opacity: 0.5; } }
+#screen-loading .step-item.active .step-indicator::before {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%;
+  border: 2px solid var(--blue-500); opacity: 0;
+  animation: halo 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes halo { 0% { transform: scale(1); opacity: .4; } 70%, 100% { transform: scale(1.75); opacity: 0; } }
+
+/* A finished step settles into its tick instead of popping past it. */
+#screen-loading .step-item.done .step-indicator::after { animation: checkSettle .34s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes checkSettle { from { transform: scale(0.45); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+#screen-loading.active .steps-list .step-item { animation: riseIn .45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+#screen-loading.active .steps-list .step-item:nth-child(1) { animation-delay: .02s; }
+#screen-loading.active .steps-list .step-item:nth-child(2) { animation-delay: .06s; }
+#screen-loading.active .steps-list .step-item:nth-child(3) { animation-delay: .10s; }
+#screen-loading.active .steps-list .step-item:nth-child(4) { animation-delay: .14s; }
+#screen-loading.active .steps-list .step-item:nth-child(5) { animation-delay: .18s; }
+#screen-loading.active .steps-list .step-item:nth-child(6) { animation-delay: .22s; }
+#screen-loading.active .steps-list .step-item:nth-child(7) { animation-delay: .26s; }
+#screen-loading.active .steps-list .step-item:nth-child(8) { animation-delay: .30s; }
+#screen-loading.active .steps-list .step-item:nth-child(9) { animation-delay: .34s; }
+#screen-loading.active .steps-list .step-item:nth-child(10) { animation-delay: .38s; }
+@keyframes riseIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
 /* Coming-soon dialog, keyed to the audit type. */
 .sp-badge { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); color: var(--key-b); }
 .sp-cta { margin: 18px auto 0; padding: 9px 18px; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
@@ -431,6 +472,9 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .ai-error span { font-size: 12.5px; color: var(--gray-500); }
 @media (prefers-reduced-motion: reduce) {
   .mode-ind, .sub-mark { transition: none; }
+  #screen-loading .progress-fill::after, #screen-loading .step-item.active .step-indicator::before,
+  #screen-loading .step-item.active .step-indicator::after, #screen-loading .step-item.done .step-indicator::after,
+  #screen-loading.active .steps-list .step-item { animation: none; }
   .ai-dot, .ai-skel i { animation: none; }
   .ai-shimmer, .ai-stream { background: none; -webkit-text-fill-color: currentColor; animation: none; }
 }
