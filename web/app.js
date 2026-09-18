@@ -814,11 +814,6 @@ function changeKey() {
   openKeyPanel({ changing: true });
 }
 
-function cancelKeyChange() {
-  document.getElementById('api-key-input').value = readStoredKey();
-  if (readKeyOk()) setKeyUi('ok');
-  closeKeyPanel(() => document.getElementById('url-input').focus({ preventScroll: true }));
-}
 
 // Keeps keyboard focus inside the dialog while it is open.
 function onDialogKey(e) {

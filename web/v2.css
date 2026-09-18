@@ -75,8 +75,12 @@ a.logo-area:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 
 .kp-steps b { font-weight: 600; }
 .kp-cta { font-weight: 600; color: var(--blue-600); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-radius: 2px; }
 .kp-cta svg { display: inline-block; margin-left: 3px; vertical-align: -1px; }
-.kp-cancel { display: none; margin: 12px auto 0; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--gray-500); cursor: pointer; }
-#key-panel[data-changing="1"] .kp-cancel { display: block; }
+/* Changing a key is a trip to the console, so the foot of the dialog offers that rather than a
+   way to back out; the close button and the backdrop already do that. */
+.kp-cancel { display: none; width: fit-content; align-items: center; justify-content: center; gap: 4px; margin: 12px auto 0; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--gray-500); text-decoration: none; cursor: pointer; }
+.kp-cancel:hover { color: var(--gray-700); }
+.kp-cancel svg { flex: none; }
+#key-panel[data-changing="1"] .kp-cancel { display: flex; }
 #key-panel[data-changing="1"] .kp-help-btn { display: none; }
 #key-panel[data-state="ok"] .kp-help-btn, #key-panel[data-state="ok"] .kp-steps { display: none; }
 /* The connected line sits under the URL bar out of flow, so showing or hiding it never moves the centered landing. */
