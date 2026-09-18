@@ -25,9 +25,15 @@ const JUDGE = (() => {
   const LABELS = [[/^gemini/, 'Gemini'], [/^claude-fable/, 'Fable'], [/^claude-opus/, 'Opus'], [/^claude-sonnet/, 'Sonnet'], [/^claude-haiku/, 'Haiku'], [/^gpt-5/, 'GPT-5'], [/^gpt-4\.1/, 'GPT-4.1'], [/^gpt-4o/, 'GPT-4o']];
   // The model this key settled on last time, so a reload does not fall back to a guess.
   const MODEL_STORE = 'geoa_model';
-  const readModel = () => { try { return localStorage.getItem(MODEL_STORE) || ''; } catch { return ''; } };
-  const storeModel = m => { try { m ? localStorage.setItem(MODEL_STORE, m) : localStorage.removeItem(MODEL_STORE); } catch {} };
-  let active = { provider: 'gemini', model: readModel() || 'gemini-2.5-flash' };
+  const readModel = () => { try { return (localStorage.getItem(MODEL_STORE) || '').replace(/^legacy:/, ''); } catch { return ''; } };
+  const readLegacy = () => { try { return /^legacy:/.test(localStorage.getItem(MODEL_STORE) || ''); } catch { return false; } };
+  const storeModel = (m, legacy) => { try { m ? localStorage.setItem(MODEL_STORE, (legacy ? 'legacy:' : '') + m) : localStorage.removeItem(MODEL_STORE); } catch {} };
+  // Google moved Gemini to the Interactions API; models.list and :generateContent are the older
+  // surface. A key made today belongs to a project set up for the new one, which is why a fresh
+  // key answered 404 to every call while an older key kept working. Interactions is tried first
+  // and the old path stays as a fallback for keys whose projects still run it.
+  const GEMINI_FALLBACK_MODEL = 'gemini-3.8-flash';
+  let active = { provider: 'gemini', model: readModel() || GEMINI_FALLBACK_MODEL, legacy: readLegacy() };
 
   // What a key may run is not a fixed list: Google adds, renames and retires models, and two
   // keys made minutes apart can differ. So nothing is insisted on by name. Everything the key
@@ -61,24 +67,39 @@ const JUDGE = (() => {
   // the shape the real run uses. Only the model's own refusal moves to the next candidate: being
   // busy or over a limit is not the model's fault, and the key is accepted.
   const PROBE_SCHEMA = { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' } }, required: ['ok'] };
-  async function firstWorking(key, ids) {
+  // What to try, in order: the current surface with the model the docs name, then every model this
+  // key lists, then the same models on the older surface for a key whose project still runs it.
+  function candidatesFrom(ids) {
+    const seen = new Set();
+    const list = [];
+    const add = (model, legacy) => {
+      const k = `${legacy ? 'L' : 'I'}:${model}`;
+      if (model && !seen.has(k)) { seen.add(k); list.push({ model, legacy }); }
+    };
+    add(GEMINI_FALLBACK_MODEL, false);
+    ids.forEach(id => add(id, false));
+    ids.forEach(id => add(id, true));
+    return list;
+  }
+
+  async function firstWorking(key, candidates) {
     let last = 'MODEL_MISSING';
-    for (const id of ids.slice(0, 4)) {
-      active.model = id;
+    for (const c of candidates.slice(0, 6)) {
+      active.model = c.model;
+      active.legacy = c.legacy;
       let resp;
       try {
         resp = await request(endpoint(key), {
           method: 'POST', headers: headersFor(key), timeout: 15000,
-          body: JSON.stringify({ contents: [{ parts: [{ text: 'Answer {"ok":true}' }] }],
-            generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: PROBE_SCHEMA, maxOutputTokens: 32 } })
+          body: JSON.stringify(bodyFor('Answer {"ok":true}', PROBE_SCHEMA, 32, 0))
         });
-      } catch { return { ok: true, model: id }; }   // network trouble says nothing about the model
-      if (resp.ok) return { ok: true, model: id };
+      } catch { last = 'GEMINI_NETWORK'; continue; }  // never left the browser: prove nothing, try the next
+      if (resp.ok) return { ok: true, ...c };
       const err = await errorOf(resp);
       const code = failure(err).code;
       if (code === 'KEY_INVALID' || code === 'KEY_PERMISSION') return { ok: false, code };
       if (code === 'MODEL_MISSING' || code === 'GEMINI_OTHER') { last = code; continue; }
-      return { ok: true, model: id };              // busy or over the limit: the key itself is fine
+      return { ok: true, ...c };                    // busy or over the limit: the key itself is fine
     }
     return { ok: false, code: last };
   }
@@ -176,7 +197,11 @@ ${JSON.stringify(input)}`;
   }
   async function errorOf(resp) {
     let err = {};
-    try { err = (await resp.json()).error || {}; } catch {}
+    // Interactions wraps its error in an array; the older path returns it bare.
+    try {
+      const j = await resp.json();
+      err = (Array.isArray(j) ? j.find(x => x && x.error) || {} : j).error || {};
+    } catch {}
     return { status: resp.status, type: err.type || err.status || err.code || '', message: err.message || '' };
   }
   // Maps a provider error to the code the app explains. The codes keep their Gemini names.
@@ -194,13 +219,17 @@ ${JSON.stringify(input)}`;
     const k = key.trim();
     if (active.provider === 'anthropic') return { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
     if (active.provider === 'openai') return { 'Content-Type': 'application/json', Authorization: `Bearer ${k}` };
-    return { 'Content-Type': 'application/json' };
+    if (active.legacy) return { 'Content-Type': 'application/json' };
+    // The docs also send Api-Revision, but a browser cannot: it is not allowed through the
+    // preflight and every call fails before it leaves. The endpoint takes requests without it.
+    return { 'Content-Type': 'application/json', 'x-goog-api-key': k };
   };
 
   function endpoint(key) {
     if (active.provider === 'anthropic') return 'https://api.anthropic.com/v1/messages';
     if (active.provider === 'openai') return 'https://api.openai.com/v1/chat/completions';
-    return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
+    if (active.legacy) return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
+    return 'https://generativelanguage.googleapis.com/v1beta/interactions';
   }
 
   function bodyFor(prompt, schema, maxTokens, thinking) {
@@ -215,9 +244,15 @@ ${JSON.stringify(input)}`;
       if (/^gpt-4/.test(active.model)) b.temperature = 0; // GPT-5 models accept only the default
       return b;
     }
-    return {
+    if (active.legacy) return {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: thinking } }
+    };
+    // Interactions takes standard JSON Schema, so the same converter the other providers use.
+    return {
+      model: active.model,
+      input: prompt,
+      response_format: { type: 'text', mime_type: 'application/json', schema: jsonSchema(schema) }
     };
   }
 
@@ -232,9 +267,19 @@ ${JSON.stringify(input)}`;
       if (!m || m.refusal) throw new AuditError('GEMINI_BLOCKED', m?.refusal || data.choices?.[0]?.finish_reason || 'no content');
       try { return JSON.parse(m.content); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
     }
-    const text = data.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('');
-    if (!text) throw new AuditError('GEMINI_BLOCKED', data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'no content');
-    try { return JSON.parse(text); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
+    if (active.legacy) {
+      const text = data.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('');
+      if (!text) throw new AuditError('GEMINI_BLOCKED', data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'no content');
+      try { return JSON.parse(text); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
+    }
+    // The answer is the text of the model_output steps; thought steps carry no text.
+    const out = data.output_text || (data.steps || [])
+      .filter(st => st.type === 'model_output')
+      .flatMap(st => st.content || [])
+      .filter(c => c.type === 'text' && c.text)
+      .map(c => c.text).join('');
+    if (!out) throw new AuditError('GEMINI_BLOCKED', data.status || data.error?.message || 'no content');
+    try { return JSON.parse(out); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
   }
 
   // One model request with a JSON schema: retries once on 429, and maps failures to
@@ -248,8 +293,10 @@ ${JSON.stringify(input)}`;
       // The model name went away. Ask the key what it can run now and retry once.
       if (resp.status === 404 && active.provider === 'gemini' && !repicked) {
         repicked = true;
-        const next = (await geminiModels(apiKey).catch(() => [])).find(m => m !== active.model);
-        if (next) { active.model = next; storeModel(next); continue; }
+        const ids = await geminiModels(apiKey).catch(() => []);
+        const here = `${active.legacy ? 'L' : 'I'}:${active.model}`;
+        const next = await firstWorking(apiKey, candidatesFrom(ids).filter(c => `${c.legacy ? 'L' : 'I'}:${c.model}` !== here));
+        if (next.ok) { active.model = next.model; active.legacy = next.legacy; storeModel(next.model, next.legacy); continue; }
       }
       if (resp.status !== 429 || attempt >= 1) break;
       let wait = parseInt(resp.headers.get('retry-after'), 10) || 20;
@@ -316,40 +363,46 @@ ${JSON.stringify(input.page)}`;
     prime(apiKey);
     const key = apiKey.trim();
     const p = PROVIDERS[active.provider];
+
+    // Gemini is settled by calling it, not by reading a list: a new project can list one thing and
+    // run another, which is how a fresh key connected and then failed every analysis. The list is
+    // only a source of names here, so a list that comes back empty is not the end of it.
+    if (active.provider === 'gemini') {
+      let listed;
+      try {
+        listed = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(key)}`, { timeout: 10000 });
+      } catch (e) { return { ok: false, code: e.code }; }
+      if (!listed.ok && listed.status === 400) return { ok: false, code: 'KEY_INVALID' };
+      let ids = [];
+      if (listed.ok) {
+        try {
+          ids = ((await listed.json()).models || [])
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => String(m.name || '').replace(/^models\//, ''))
+            .filter(n => n && !NOT_TEXT.test(n))
+            .sort((x, y) => rankModel(x) - rankModel(y) || verOf(y) - verOf(x) || x.localeCompare(y));
+        } catch {}
+      }
+      const pick = await firstWorking(key, candidatesFrom(ids));
+      if (!pick.ok) { storeModel(''); return { ok: false, code: pick.code }; }
+      active = { provider: 'gemini', model: pick.model, legacy: pick.legacy };
+      storeModel(pick.model, pick.legacy);
+      return { ok: true };
+    }
+
     let resp;
     try {
-      if (active.provider === 'gemini') resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`, { timeout: 10000 });
-      else if (active.provider === 'anthropic') resp = await request('https://api.anthropic.com/v1/models?limit=100', { headers: headersFor(key), timeout: 10000 });
+      if (active.provider === 'anthropic') resp = await request('https://api.anthropic.com/v1/models?limit=100', { headers: headersFor(key), timeout: 10000 });
       else resp = await request('https://api.openai.com/v1/models', { headers: headersFor(key), timeout: 10000 });
     } catch (e) {
       return { ok: false, code: e.code };
     }
-    if (!resp.ok) {
-      const e = await errorOf(resp);
-      if (active.provider === 'gemini' && resp.status === 400) return { ok: false, code: 'KEY_INVALID' };
-      return { ok: false, code: failure(e).code };
-    }
-    if (active.provider === 'gemini') {
-      let ids = [];
-      try {
-        ids = ((await resp.json()).models || [])
-          .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-          .map(m => String(m.name || '').replace(/^models\//, ''))
-          .filter(n => n && !NOT_TEXT.test(n))
-          .sort((a, b) => rankModel(a) - rankModel(b) || verOf(b) - verOf(a) || a.localeCompare(b));
-      } catch {}
-      if (!ids.length) return { ok: false, code: 'KEY_PERMISSION' };
-      const pick = await firstWorking(key, ids);
-      if (!pick.ok) { storeModel(''); return { ok: false, code: pick.code }; }
-      active = { provider: 'gemini', model: pick.model };
-      storeModel(pick.model);
-    } else {
-      let ids = [];
-      try { ids = ((await resp.json()).data || []).map(m => m.id); } catch {}
-      const pick = p.models.find(m => ids.includes(m)) || ids.find(id => active.provider === 'anthropic' ? /^claude/.test(id) : /^gpt-/.test(id));
-      if (!pick) return { ok: false, code: 'KEY_PERMISSION' };
-      active = { provider: active.provider, model: pick };
-    }
+    if (!resp.ok) return { ok: false, code: failure(await errorOf(resp)).code };
+    let ids = [];
+    try { ids = ((await resp.json()).data || []).map(m => m.id); } catch {}
+    const pick = p.models.find(m => ids.includes(m)) || ids.find(id => active.provider === 'anthropic' ? /^claude/.test(id) : /^gpt-/.test(id));
+    if (!pick) return { ok: false, code: 'KEY_PERMISSION' };
+    active = { provider: active.provider, model: pick, legacy: false };
     return { ok: true };
   }
 
