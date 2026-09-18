@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=54">
+  <link rel="stylesheet" href="v2.css?v=65">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -24,6 +24,11 @@
         <stop stop-color="#3B82F6"/>
         <stop offset="0.5" stop-color="#2563EB"/>
         <stop offset="1" stop-color="#1D4ED8"/>
+      </linearGradient>
+      <linearGradient id="typeGrad" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+        <stop stop-color="var(--key-a)"/>
+        <stop offset="0.55" stop-color="var(--key-b)"/>
+        <stop offset="1" stop-color="var(--key-c)"/>
       </linearGradient>
       <symbol id="geoa-mark" viewBox="0 0 36 36">
         <path d="M18 20.3 6.4 28.85M18 20.3 29.6 28.85M18 20.3V7.15" fill="none" stroke="url(#geoaGlyph)" stroke-width="2.8" stroke-linecap="round" stroke-opacity="0.55"/>
@@ -39,19 +44,23 @@
     <div id="screen-landing" class="screen active">
       <div class="landing-container">
         <div class="landing-content">
+          <div class="title-block">
           <a class="logo-area" href="./" title="Reload GEO Analyst">
             <div class="logo-icon">
               <svg class="geoa-mark" width="44" height="44" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             </div>
             <h1 class="product-name">GEO Analyst</h1>
           </a>
+          <p class="sub-brand" id="sub-brand" aria-hidden="true"><span class="sub-for">for</span><span class="sub-mark" id="sub-mark"></span></p>
+          </div>
           <div class="mode-tabs" role="tablist" aria-label="Audit type">
+            <span class="mode-ind" aria-hidden="true"></span>
             <button type="button" class="mode-tab active" role="tab" data-mode="platform" aria-selected="true">Platform</button>
             <button type="button" class="mode-tab" role="tab" data-mode="social" aria-selected="false" tabindex="-1">Social</button>
-            <button type="button" class="mode-tab" role="tab" data-mode="youtube" aria-selected="false" tabindex="-1">YouTube</button>
+            <button type="button" class="mode-tab" role="tab" data-mode="youtube" aria-selected="false" tabindex="-1">Video</button>
           </div>
           <div class="mode-stage">
-          <section class="mode-slide active" data-mode="platform" role="tabpanel">
+          <section class="mode-slide" data-mode="platform" role="tabpanel">
           <p class="product-tagline">Diagnose how AI-ready your platform is across URL structure, page structure, answerability and schema markup, scored on a checklist you can verify.</p>
 
           <div class="input-area">
@@ -71,7 +80,7 @@
             </p>
           </div>
           </section>
-          <section class="mode-slide" data-mode="social" role="tabpanel" aria-hidden="true">
+          <section class="mode-slide" data-mode="social" role="tabpanel" aria-hidden="true" inert>
             <p class="product-tagline">Diagnose how AI-ready your social presence is across profiles, posts and captions, scored on the same checklist you can verify.</p>
             <div class="input-area">
               <div class="url-input-wrapper soon-bar">
@@ -79,8 +88,8 @@
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-                <input type="text" placeholder="Paste the full URL of the profile to analyze" readonly aria-disabled="true">
-                <button type="button" class="btn-primary btn-soon"><span>Coming soon</span></button>
+                <input type="text" placeholder="Paste the full URL of the posting to analyze" readonly aria-disabled="true">
+                <button type="button" class="btn-primary btn-soon"><svg class="soon-lock" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3.2" y="6.8" width="9.6" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5.6 6.8V5.2a2.4 2.4 0 0 1 4.8 0v1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Coming soon</span></button>
               </div>
             <p class="key-connected" data-state="off" hidden>
               <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -88,7 +97,7 @@
             </p>
             </div>
           </section>
-          <section class="mode-slide" data-mode="youtube" role="tabpanel" aria-hidden="true">
+          <section class="mode-slide" data-mode="youtube" role="tabpanel" aria-hidden="true" inert>
             <p class="product-tagline">Diagnose how AI-ready your channel and videos are, from titles and chapters to descriptions and transcripts.</p>
             <div class="input-area">
               <div class="url-input-wrapper soon-bar">
@@ -97,7 +106,7 @@
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
                 <input type="text" placeholder="Paste the full URL of the video to analyze" readonly aria-disabled="true">
-                <button type="button" class="btn-primary btn-soon"><span>Coming soon</span></button>
+                <button type="button" class="btn-primary btn-soon"><svg class="soon-lock" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3.2" y="6.8" width="9.6" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5.6 6.8V5.2a2.4 2.4 0 0 1 4.8 0v1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Coming soon</span></button>
               </div>
             <p class="key-connected" data-state="off" hidden>
               <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -218,6 +227,6 @@
   <script src="judge.js?v=7"></script>
   <script src="fixes.js?v=8"></script>
   <script src="pdf.js?v=3"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=46"></script>
 </body>
 </html>

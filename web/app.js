@@ -723,15 +723,30 @@ function onDialogKey(e) {
 }
 
 // ===== AUDIT TYPES =====
+// One motion for everything that changes with the type: what leaves fades out where it stands,
+// what arrives rises a few pixels into place. The two never share the screen.
+const SWAP_OUT = { duration: 110, easing: 'ease-in', fill: 'forwards' };
+const SWAP_IN = { duration: 320, delay: 120, easing: EASE, fill: 'backwards' };
+const SWAP_RISE = [{ opacity: 0, transform: 'translate3d(0, 7px, 0)' }, { opacity: 1, transform: 'translate3d(0, 0, 0)' }];
+const SWAP_FADE = [{ opacity: 1 }, { opacity: 0 }];
+
 // Platform is live; Social and YouTube are announced. Switching slides the panel sideways in
 // tab order and re-keys the landing colors through body[data-mode].
 const MODES = ['platform', 'social', 'youtube'];
+// The sub-brand is the platform's own wordmark. Drop the official file at brand/<type>.svg
+// (see brand/README.md) and it is used as is; until then the name stands in as text.
+// ratio is the file's own aspect, so the box width is known before the image decodes.
+const TYPE_BRAND = {
+  social: { name: 'Instagram', height: 17, ratio: 148.36 / 32.8 },
+  youtube: { name: 'YouTube', height: 14, ratio: 381 / 86 }
+};
 let landingMode = 'platform';
+let modeToken = 0;
 function setMode(mode) {
   if (!MODES.includes(mode) || mode === landingMode) return;
-  const dir = MODES.indexOf(mode) > MODES.indexOf(landingMode) ? 1 : -1;
   const prev = document.querySelector(`.mode-slide[data-mode="${landingMode}"]`);
   const next = document.querySelector(`.mode-slide[data-mode="${mode}"]`);
+  const nextOnTop = MODES.indexOf(mode) > MODES.indexOf(landingMode);
   landingMode = mode;
   document.body.dataset.mode = mode;
   document.querySelectorAll('.mode-tab').forEach(t => {
@@ -740,19 +755,111 @@ function setMode(mode) {
     t.setAttribute('aria-selected', String(on));
     t.tabIndex = on ? 0 : -1;
   });
-  document.querySelectorAll('.mode-slide').forEach(s => { s.getAnimations().forEach(a => a.cancel()); s.classList.remove('leaving'); });
-  next.classList.add('active');
+  positionModeIndicator();
+  setSubBrand(mode);
+
+  // Subtree, so a half-finished swap from a quick switch is cleared too.
+  const token = ++modeToken;
+  document.querySelectorAll('.mode-slide').forEach(s => s.getAnimations({ subtree: true }).forEach(an => an.cancel()));
+  next.inert = false;
   next.setAttribute('aria-hidden', 'false');
-  prev.classList.remove('active');
+  prev.inert = true;
   prev.setAttribute('aria-hidden', 'true');
   if (reducedMotion() || !prev.animate) return;
-  prev.classList.add('leaving');
-  const out = prev.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-36 * dir}px)` }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
-  const done = () => { prev.classList.remove('leaving'); out.cancel(); };
-  out.onfinish = done;
-  // Animations pause in background tabs; clear the leaving state regardless.
-  setTimeout(done, 400);
-  next.animate([{ opacity: 0, transform: `translateX(${36 * dir}px)` }, { opacity: 1, transform: 'none' }], { duration: 340, delay: 90, easing: EASE, fill: 'backwards' });
+
+  // The two lines of copy never share the screen: the old one is gone before the new one
+  // arrives, so there is no doubled text and nothing slides under the reader's eye.
+  // The copy and the placeholder move exactly as the wordmark does.
+  ['.product-tagline', 'input'].forEach(sel => {
+    prev.querySelector(sel)?.animate(SWAP_FADE, SWAP_OUT);
+    next.querySelector(sel)?.animate(SWAP_RISE, SWAP_IN);
+  });
+
+  // The button is one pill throughout: both copies take the same width, and the one underneath
+  // stays solid while the one on top crosses it, so it never thins or shows the bar through.
+  const pBtn = prev.querySelector('.btn-primary'), nBtn = next.querySelector('.btn-primary');
+  if (pBtn && nBtn) {
+    const from = pBtn.offsetWidth, to = nBtn.offsetWidth;
+    const top = nextOnTop ? nBtn : pBtn, under = nextOnTop ? pBtn : nBtn;
+    const opts = { duration: 260, easing: EASE, fill: 'forwards' };
+    top.animate([{ width: `${from}px`, opacity: nextOnTop ? 0 : 1 }, { width: `${to}px`, opacity: nextOnTop ? 1 : 0 }], opts);
+    under.animate([{ width: `${from}px`, opacity: 1 }, { width: `${to}px`, opacity: 1 }], opts);
+  }
+
+  // Animations pause in background tabs, so clear the held end states on a timer either way.
+  setTimeout(() => {
+    if (token !== modeToken) return;
+    [prev, next].forEach(s => s.getAnimations({ subtree: true }).forEach(an => an.cancel()));
+  }, 420);
+}
+
+// The type's own wordmark under the title. The mark cross-fades and the box glides to the new
+// width, so switching types reads as one movement instead of a swap.
+function setSubBrand(mode) {
+  const line = document.getElementById('sub-brand');
+  const mark = document.getElementById('sub-mark');
+  const brand = TYPE_BRAND[mode];
+  line.classList.toggle('on', !!brand);
+  line.setAttribute('aria-hidden', String(!brand));
+
+  const old = mark.lastElementChild;
+  if (old && old.dataset.mode === mode) return;
+  // On the way out the box keeps its width until the mark has gone, so nothing slides sideways
+  // behind the fade.
+  if (!brand) { fadeMark(old, false, () => { mark.style.width = '0px'; }); return; }
+
+  // The files are preloaded, so the new mark is already there as the old one fades out.
+  const img = new Image();
+  img.className = 'sub-logo';
+  img.dataset.mode = mode;
+  img.alt = brand.name;
+  img.height = brand.height;
+  img.onerror = () => {
+    const word = document.createElement('span');
+    word.className = `sub-word ${mode}`;
+    word.dataset.mode = mode;
+    word.textContent = brand.name;
+    img.replaceWith(word);
+    mark.style.width = '';
+  };
+  img.src = `brand/${mode}.svg`;
+  mark.appendChild(img);
+  // Coming from Platform there is no old width to glide from, so the box takes its size at once
+  // and the mark rises straight up instead of drifting in from the right.
+  if (!old) mark.style.transition = 'none';
+  mark.style.width = `${Math.round(brand.height * brand.ratio)}px`;
+  if (!old) { mark.getBoundingClientRect(); mark.style.transition = ''; }
+  fadeMark(old, false);
+  fadeMark(img, true);
+}
+
+// Fades one wordmark in, rising into place, or out and away. The timeout stands in for onfinish
+// when the tab is hidden and animations are paused.
+function fadeMark(el, show, after) {
+  if (!el) { after?.(); return; }
+  if (show) {
+    if (!reducedMotion() && el.animate) el.animate(SWAP_RISE, SWAP_IN);
+    return;
+  }
+  const drop = () => { el.remove(); after?.(); };
+  if (reducedMotion() || !el.animate) { drop(); return; }
+  let done = false;
+  const once = () => { if (!done) { done = true; drop(); } };
+  el.animate(SWAP_FADE, SWAP_OUT).onfinish = once;
+  setTimeout(once, 400);
+}
+
+// Keeps the tint pill on the active tab. Measured, so it survives font loads and resizes.
+function positionModeIndicator(animate = true) {
+  const tabs = document.querySelector('.mode-tabs');
+  const ind = tabs?.querySelector('.mode-ind');
+  const act = tabs?.querySelector('.mode-tab.active');
+  if (!ind || !act) return;
+  if (!animate || reducedMotion()) ind.style.transition = 'none';
+  ind.style.width = `${act.offsetWidth}px`;
+  ind.style.height = `${act.offsetHeight}px`;
+  ind.style.transform = `translate(${act.offsetLeft}px, ${act.offsetTop}px)`;
+  if (!animate || reducedMotion()) { ind.getBoundingClientRect(); ind.style.transition = ''; }
 }
 
 // ===== COMING SOON =====
@@ -804,6 +911,10 @@ function closeSoonPanel(goPlatform = false) {
   const urlInput = document.getElementById('url-input');
   const keyInput = document.getElementById('api-key-input');
   document.querySelectorAll('.mode-tab').forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  Object.keys(TYPE_BRAND).forEach(m => { const i = new Image(); i.src = `brand/${m}.svg`; });
+  positionModeIndicator(false);
+  document.fonts?.ready.then(() => positionModeIndicator(false));
+  new ResizeObserver(() => positionModeIndicator(false)).observe(document.querySelector('.mode-tabs'));
   document.querySelector('.mode-tabs').addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const m = MODES[(MODES.indexOf(landingMode) + (e.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length];
