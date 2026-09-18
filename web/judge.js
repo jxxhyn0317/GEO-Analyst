@@ -25,6 +25,23 @@ const JUDGE = (() => {
   const LABELS = [[/^gemini/, 'Gemini'], [/^claude-fable/, 'Fable'], [/^claude-opus/, 'Opus'], [/^claude-sonnet/, 'Sonnet'], [/^claude-haiku/, 'Haiku'], [/^gpt-5/, 'GPT-5'], [/^gpt-4\.1/, 'GPT-4.1'], [/^gpt-4o/, 'GPT-4o']];
   let active = { provider: 'gemini', model: 'gemini-2.5-flash' };
 
+  // Google retires model names, so never trust a hard-coded one: ask the key what it can run.
+  // Keeps only the flash family that supports generateContent, newest first, lite last.
+  async function geminiModels(key) {
+    const resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key.trim())}`, { timeout: 10000 });
+    if (!resp.ok) throw failure(await errorOf(resp));
+    let models = [];
+    try { models = (await resp.json()).models || []; } catch {}
+    const ver = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
+    return models
+      .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => String(m.name || '').replace(/^models\//, ''))
+      .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n))
+      .sort((a, b) => (/lite/.test(a) - /lite/.test(b)) || ver(b) - ver(a));
+  }
+  // The tested model if the key still has it, otherwise the newest one it does have.
+  const pickGemini = ids => PROVIDERS.gemini.models.find(m => ids.includes(m)) || ids[0] || null;
+
   function detect(key) {
     const k = String(key || '').trim();
     if (/^sk-ant-/.test(k)) return 'anthropic';
@@ -129,6 +146,7 @@ ${JSON.stringify(input)}`;
     if (e.status === 429 || /RESOURCE_EXHAUSTED|rate_limit|insufficient_quota|quota/i.test(msg)) return new AuditError('QUOTA', detail);
     if (e.status === 403 || /permission_error|PERMISSION_DENIED/i.test(msg)) return new AuditError('KEY_PERMISSION', detail);
     if (e.status >= 500 || /overloaded_error|server_error/i.test(msg)) return new AuditError('GEMINI_BUSY', detail);
+    if (e.status === 404 || /NOT_FOUND|is not found|not supported for|model_not_found/i.test(msg)) return new AuditError('MODEL_MISSING', detail);
     return new AuditError('GEMINI_OTHER', detail);
   }
   const headersFor = key => {
@@ -183,10 +201,16 @@ ${JSON.stringify(input)}`;
   async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note } = {}) {
     prime(apiKey);
     const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking));
-    let resp;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let resp, repicked = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
       resp = await request(endpoint(apiKey), { method: 'POST', headers: headersFor(apiKey), body });
-      if (resp.status !== 429 || attempt === 1) break;
+      // The model name went away. Ask the key what it can run now and retry once.
+      if (resp.status === 404 && active.provider === 'gemini' && !repicked) {
+        repicked = true;
+        const next = (await geminiModels(apiKey).catch(() => [])).find(m => m !== active.model);
+        if (next) { active.model = next; continue; }
+      }
+      if (resp.status !== 429 || attempt >= 1) break;
       let wait = parseInt(resp.headers.get('retry-after'), 10) || 20;
       try { const e = await resp.clone().json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = parseInt(r.retryDelay, 10) || wait; } catch {}
       wait = Math.min(30, Math.max(5, wait));
@@ -253,7 +277,7 @@ ${JSON.stringify(input.page)}`;
     const p = PROVIDERS[active.provider];
     let resp;
     try {
-      if (active.provider === 'gemini') resp = await request(`https://generativelanguage.googleapis.com/v1beta/models/${p.models[0]}?key=${encodeURIComponent(key)}`, { timeout: 10000 });
+      if (active.provider === 'gemini') resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`, { timeout: 10000 });
       else if (active.provider === 'anthropic') resp = await request('https://api.anthropic.com/v1/models?limit=100', { headers: headersFor(key), timeout: 10000 });
       else resp = await request('https://api.openai.com/v1/models', { headers: headersFor(key), timeout: 10000 });
     } catch (e) {
@@ -264,7 +288,21 @@ ${JSON.stringify(input.page)}`;
       if (active.provider === 'gemini' && resp.status === 400) return { ok: false, code: 'KEY_INVALID' };
       return { ok: false, code: failure(e).code };
     }
-    if (active.provider !== 'gemini') {
+    if (active.provider === 'gemini') {
+      let ids = [];
+      try {
+        const j = await resp.json();
+        const ver = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
+        ids = (j.models || [])
+          .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map(m => String(m.name || '').replace(/^models\//, ''))
+          .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n))
+          .sort((a, b) => (/lite/.test(a) - /lite/.test(b)) || ver(b) - ver(a));
+      } catch {}
+      const pick = pickGemini(ids);
+      if (!pick) return { ok: false, code: 'KEY_PERMISSION' };
+      active = { provider: 'gemini', model: pick };
+    } else {
       let ids = [];
       try { ids = ((await resp.json()).data || []).map(m => m.id); } catch {}
       const pick = p.models.find(m => ids.includes(m)) || ids.find(id => active.provider === 'anthropic' ? /^claude/.test(id) : /^gpt-/.test(id));

@@ -247,6 +247,7 @@ const ERROR_COPY = {
   GEMINI_NETWORK: { title: 'We couldn’t reach Gemini', body: 'Your network may be blocking Google’s API.', tips: ['Check your connection, or try a different network.'], action: 'retry' },
   GEMINI_BLOCKED: { title: 'Gemini couldn’t finish this analysis', body: 'It stopped without giving a result. This sometimes happens with certain page content.', tips: ['Try again. If it repeats, try a different page.'], action: 'retry' },
   GEMINI_BAD_OUTPUT: { title: 'Gemini’s answer came back incomplete', body: 'We couldn’t read the result it sent.', tips: ['Try again.'], action: 'retry' },
+  MODEL_MISSING: { title: 'That Gemini model is no longer available', body: 'Google retires model names over time. We look up the models your key can run and switch automatically, so this usually clears on a retry.', tips: ['Try again.', 'If it repeats, remove and re-enter your key so we can pick a fresh model.'], action: 'retry' },
   GEMINI_OTHER: { title: 'Gemini couldn’t process the request', body: 'Google returned an error.', tips: ['Try again in a moment.'], action: 'retry' }
 };
 const WARNING_COPY = {
@@ -528,6 +529,7 @@ const KEY_STATUS_COPY = {
   QUOTA: 'This key has reached its limit for now. Try again in a minute.',
   GEMINI_NETWORK: 'We couldn’t check the key. Check your connection, then try again.',
   GEMINI_TIMEOUT: 'Checking took too long. Try again.',
+  MODEL_MISSING: 'No Gemini model is available for this key right now. Try again.',
   other: 'We couldn’t check this key. Try again.'
 };
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
