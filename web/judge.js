@@ -1,8 +1,9 @@
-// ===== GEMINI JUDGMENT =====
+// ===== MODEL JUDGMENT =====
 // Optional second pass. The engine has already measured and scored everything it can
-// count; Gemini only rules on the items that need reading comprehension, and writes
+// count; the model only rules on the items that need reading comprehension, and writes
 // the diagnosis text. Scores stay on the same bands, so the result remains checkable.
 // A separate request drafts suggested fixes; those never touch a score.
+// The key decides the provider: Gemini (AIza…), Claude (sk-ant-…) or OpenAI (sk-…).
 
 // A failure the app can explain to the user; `code` keys into ERROR_COPY in app.js.
 class AuditError extends Error {
@@ -15,9 +16,27 @@ class AuditError extends Error {
 }
 
 const JUDGE = (() => {
-  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
-  const MODEL = 'gemini-2.5-flash';
   const TIMEOUT_MS = 90000;
+  const PROVIDERS = {
+    gemini: { name: 'Gemini', vendor: 'Google', console: 'Google AI Studio', models: ['gemini-2.5-flash'] },
+    anthropic: { name: 'Claude', vendor: 'Anthropic', console: 'the Anthropic Console', models: ['claude-fable-5-1', 'claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'] },
+    openai: { name: 'OpenAI', vendor: 'OpenAI', console: 'the OpenAI dashboard', models: ['gpt-5-mini', 'gpt-5', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o'] }
+  };
+  const LABELS = [[/^gemini/, 'Gemini'], [/^claude-fable/, 'Fable'], [/^claude-opus/, 'Opus'], [/^claude-sonnet/, 'Sonnet'], [/^claude-haiku/, 'Haiku'], [/^gpt-5/, 'GPT-5'], [/^gpt-4\.1/, 'GPT-4.1'], [/^gpt-4o/, 'GPT-4o']];
+  let active = { provider: 'gemini', model: 'gemini-2.5-flash' };
+
+  function detect(key) {
+    const k = String(key || '').trim();
+    if (/^sk-ant-/.test(k)) return 'anthropic';
+    if (/^sk-/.test(k)) return 'openai';
+    return 'gemini';
+  }
+  // Sets the provider from the key before it is verified, so labels are right from the start.
+  function prime(key) {
+    const p = detect(key);
+    if (active.provider !== p) active = { provider: p, model: PROVIDERS[p].models[0] };
+  }
+  const modelLabel = () => (LABELS.find(([re]) => re.test(active.model)) || [null, active.model])[1];
 
   const S = (type, extra) => ({ type, ...extra });
   const STR_LIST = S('ARRAY', { items: S('STRING') });
@@ -37,6 +56,19 @@ const JUDGE = (() => {
     },
     required: ['headings', 'openingAnswers', 'openingReason', 'factIds', 'qualifierIds', 'experienceIds', 'headline', 'strengths', 'weaknesses', 'dimensions']
   });
+
+  // Gemini takes the schema as written; Claude and OpenAI take standard JSON Schema.
+  function jsonSchema(node) {
+    if (Array.isArray(node)) return node.map(jsonSchema);
+    if (!node || typeof node !== 'object') return node;
+    const out = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'type' && typeof v === 'string') out.type = v.toLowerCase();
+      else if (k === 'format' && v === 'enum') continue;
+      else out[k] = jsonSchema(v);
+    }
+    return out;
+  }
 
   function summarize(r) {
     return r.dimensions.map(d => ({
@@ -76,49 +108,93 @@ PAGE_DATA:
 ${JSON.stringify(input)}`;
   }
 
-  // One Gemini request with a JSON schema: retries once on 429, and maps failures to
-  // AuditError codes the app can explain.
-  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note } = {}) {
-    const body = JSON.stringify({
+  // ---------- transport ----------
+  async function request(url, init) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(init.timeout || TIMEOUT_MS) });
+    } catch (e) {
+      throw new AuditError(e.name === 'TimeoutError' ? 'GEMINI_TIMEOUT' : 'GEMINI_NETWORK', e.message);
+    }
+  }
+  async function errorOf(resp) {
+    let err = {};
+    try { err = (await resp.json()).error || {}; } catch {}
+    return { status: resp.status, type: err.type || err.status || err.code || '', message: err.message || '' };
+  }
+  // Maps a provider error to the code the app explains. The codes keep their Gemini names.
+  function failure(e) {
+    const msg = `${e.type} ${e.message}`;
+    const detail = `HTTP ${e.status}${e.type ? ' ' + e.type : ''}`;
+    if (e.status === 401 || /API_KEY_INVALID|api key not valid|API key expired|authentication_error|invalid_api_key|Incorrect API key/i.test(msg)) return new AuditError('KEY_INVALID', detail);
+    if (e.status === 429 || /RESOURCE_EXHAUSTED|rate_limit|insufficient_quota|quota/i.test(msg)) return new AuditError('QUOTA', detail);
+    if (e.status === 403 || /permission_error|PERMISSION_DENIED/i.test(msg)) return new AuditError('KEY_PERMISSION', detail);
+    if (e.status >= 500 || /overloaded_error|server_error/i.test(msg)) return new AuditError('GEMINI_BUSY', detail);
+    return new AuditError('GEMINI_OTHER', detail);
+  }
+  const headersFor = key => {
+    const k = key.trim();
+    if (active.provider === 'anthropic') return { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    if (active.provider === 'openai') return { 'Content-Type': 'application/json', Authorization: `Bearer ${k}` };
+    return { 'Content-Type': 'application/json' };
+  };
+
+  function endpoint(key) {
+    if (active.provider === 'anthropic') return 'https://api.anthropic.com/v1/messages';
+    if (active.provider === 'openai') return 'https://api.openai.com/v1/chat/completions';
+    return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
+  }
+
+  function bodyFor(prompt, schema, maxTokens, thinking) {
+    if (active.provider === 'anthropic') return {
+      model: active.model, max_tokens: maxTokens, temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [{ name: 'result', description: 'Return the structured result.', input_schema: jsonSchema(schema) }],
+      tool_choice: { type: 'tool', name: 'result' }
+    };
+    if (active.provider === 'openai') {
+      const b = { model: active.model, messages: [{ role: 'user', content: prompt }], max_completion_tokens: maxTokens, response_format: { type: 'json_schema', json_schema: { name: 'result', schema: jsonSchema(schema) } } };
+      if (/^gpt-4/.test(active.model)) b.temperature = 0; // GPT-5 models accept only the default
+      return b;
+    }
+    return {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0,
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-        maxOutputTokens: maxTokens,
-        thinkingConfig: { thinkingBudget: thinking }
-      }
-    });
-    let resp;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      resp = await fetch(`${BASE}${MODEL}:generateContent?key=${encodeURIComponent(apiKey.trim())}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        body
-      }).catch(e => { throw new AuditError(e.name === 'TimeoutError' ? 'GEMINI_TIMEOUT' : 'GEMINI_NETWORK', e.message); });
-      if (resp.status !== 429 || attempt === 1) break;
-      let wait = 20;
-      try { const e = await resp.clone().json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = Math.min(30, Math.max(5, parseInt(r.retryDelay, 10) || 20)); } catch {}
-      if (note) note(`Gemini is busy, trying again in ${wait}s`, 'yellow');
-      await new Promise(r => setTimeout(r, wait * 1000));
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: thinking } }
+    };
+  }
+
+  function parse(data) {
+    if (active.provider === 'anthropic') {
+      const block = (data.content || []).find(b => b.type === 'tool_use');
+      if (!block) throw new AuditError(data.stop_reason === 'max_tokens' ? 'GEMINI_BAD_OUTPUT' : 'GEMINI_BLOCKED', data.stop_reason || 'no content');
+      return block.input;
     }
-    if (!resp.ok) {
-      let err = {};
-      try { err = (await resp.json()).error || {}; } catch {}
-      const msg = `${err.status || ''} ${err.message || ''} ${JSON.stringify(err.details || '')}`;
-      const detail = `HTTP ${resp.status}${err.status ? ' ' + err.status : ''}`;
-      if (/API_KEY_INVALID|api key not valid|API key expired/i.test(msg)) throw new AuditError('KEY_INVALID', detail);
-      if (resp.status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(msg)) throw new AuditError('QUOTA', detail);
-      if (resp.status === 403) throw new AuditError('KEY_PERMISSION', detail);
-      if (resp.status >= 500) throw new AuditError('GEMINI_BUSY', detail);
-      throw new AuditError('GEMINI_OTHER', detail);
+    if (active.provider === 'openai') {
+      const m = data.choices?.[0]?.message;
+      if (!m || m.refusal) throw new AuditError('GEMINI_BLOCKED', m?.refusal || data.choices?.[0]?.finish_reason || 'no content');
+      try { return JSON.parse(m.content); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
     }
-    const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('');
     if (!text) throw new AuditError('GEMINI_BLOCKED', data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'no content');
-    try { return JSON.parse(text); }
-    catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
+    try { return JSON.parse(text); } catch (e) { throw new AuditError('GEMINI_BAD_OUTPUT', e.message); }
+  }
+
+  // One model request with a JSON schema: retries once on 429, and maps failures to
+  // AuditError codes the app can explain.
+  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note } = {}) {
+    prime(apiKey);
+    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking));
+    let resp;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      resp = await request(endpoint(apiKey), { method: 'POST', headers: headersFor(apiKey), body });
+      if (resp.status !== 429 || attempt === 1) break;
+      let wait = parseInt(resp.headers.get('retry-after'), 10) || 20;
+      try { const e = await resp.clone().json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = parseInt(r.retryDelay, 10) || wait; } catch {}
+      wait = Math.min(30, Math.max(5, wait));
+      if (note) note(`${PROVIDERS[active.provider].name} is busy, trying again in ${wait}s`, 'yellow');
+      await new Promise(r => setTimeout(r, wait * 1000));
+    }
+    if (!resp.ok) throw failure(await errorOf(resp));
+    return parse(await resp.json());
   }
 
   function judge(apiKey, result, note) {
@@ -170,24 +246,41 @@ ${JSON.stringify(input.page)}`;
     return call(apiKey, buildSuggestPrompt(input), SUGGEST_SCHEMA, { maxTokens: 6144, thinking: 1024, note });
   }
 
-  // Confirms the key can use the model before any audit starts. Reading the model's
-  // metadata spends no tokens and no generation quota.
+  // Confirms the key works and picks the model to use. Listing models spends no tokens.
   async function verifyKey(apiKey) {
+    prime(apiKey);
+    const key = apiKey.trim();
+    const p = PROVIDERS[active.provider];
     let resp;
     try {
-      resp = await fetch(`${BASE}${MODEL}?key=${encodeURIComponent(apiKey.trim())}`, { signal: AbortSignal.timeout(10000) });
+      if (active.provider === 'gemini') resp = await request(`https://generativelanguage.googleapis.com/v1beta/models/${p.models[0]}?key=${encodeURIComponent(key)}`, { timeout: 10000 });
+      else if (active.provider === 'anthropic') resp = await request('https://api.anthropic.com/v1/models?limit=100', { headers: headersFor(key), timeout: 10000 });
+      else resp = await request('https://api.openai.com/v1/models', { headers: headersFor(key), timeout: 10000 });
     } catch (e) {
-      return { ok: false, code: e.name === 'TimeoutError' ? 'GEMINI_TIMEOUT' : 'GEMINI_NETWORK' };
+      return { ok: false, code: e.code };
     }
-    if (resp.ok) return { ok: true };
-    let err = {};
-    try { err = (await resp.json()).error || {}; } catch {}
-    const msg = `${err.status || ''} ${err.message || ''} ${JSON.stringify(err.details || '')}`;
-    if (resp.status === 400 || /API_KEY_INVALID|api key not valid|API key expired/i.test(msg)) return { ok: false, code: 'KEY_INVALID' };
-    if (resp.status === 403) return { ok: false, code: 'KEY_PERMISSION' };
-    if (resp.status === 429) return { ok: false, code: 'QUOTA' };
-    return { ok: false, code: 'GEMINI_OTHER' };
+    if (!resp.ok) {
+      const e = await errorOf(resp);
+      if (active.provider === 'gemini' && resp.status === 400) return { ok: false, code: 'KEY_INVALID' };
+      return { ok: false, code: failure(e).code };
+    }
+    if (active.provider !== 'gemini') {
+      let ids = [];
+      try { ids = ((await resp.json()).data || []).map(m => m.id); } catch {}
+      const pick = p.models.find(m => ids.includes(m)) || ids.find(id => active.provider === 'anthropic' ? /^claude/.test(id) : /^gpt-/.test(id));
+      if (!pick) return { ok: false, code: 'KEY_PERMISSION' };
+      active = { provider: active.provider, model: pick };
+    }
+    return { ok: true };
   }
 
-  return { judge, suggest, verifyKey, MODEL };
+  return {
+    judge, suggest, verifyKey, detect, prime, modelLabel,
+    provider: () => active.provider,
+    providerName: () => PROVIDERS[active.provider].name,
+    providerNameFor: key => PROVIDERS[detect(key)].name,
+    vendorFor: key => PROVIDERS[detect(key)].vendor,
+    consoleName: () => PROVIDERS[active.provider].console,
+    get MODEL() { return active.model; }
+  };
 })();

@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=41">
+  <link rel="stylesheet" href="v2.css?v=46">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -45,6 +45,13 @@
             </div>
             <h1 class="product-name">GEO Analyst</h1>
           </a>
+          <div class="mode-tabs" role="tablist" aria-label="Audit type">
+            <button type="button" class="mode-tab active" role="tab" data-mode="platform" aria-selected="true">Platform</button>
+            <button type="button" class="mode-tab" role="tab" data-mode="social" aria-selected="false" tabindex="-1">Social</button>
+            <button type="button" class="mode-tab" role="tab" data-mode="youtube" aria-selected="false" tabindex="-1">YouTube</button>
+          </div>
+          <div class="mode-stage">
+          <section class="mode-slide active" data-mode="platform" role="tabpanel">
           <p class="product-tagline">Diagnose how AI-ready your platform is across URL structure, page structure, answerability and schema markup, scored on a checklist you can verify.</p>
 
           <div class="input-area">
@@ -58,15 +65,43 @@
                 <span>Analyze</span>
               </button>
             </div>
-            <p class="key-connected" id="key-connected" hidden>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span class="key-connected-label">Gemini key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change" onclick="changeKey()">Change</button>
+            <p class="key-connected" id="key-connected" data-state="off" hidden>
+              <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="kc-off" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4.5" stroke="#CBD5E1" stroke-width="1.6" stroke-dasharray="2.4 2.2"/></svg>
+              <span class="key-connected-label" id="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change" id="key-connected-action" onclick="keyLineAction()">Connect</button>
             </p>
+          </div>
+          </section>
+          <section class="mode-slide" data-mode="social" role="tabpanel" aria-hidden="true">
+            <p class="product-tagline">Diagnose how AI-ready your social presence is across profiles, posts and captions, scored on the same checklist you can verify.</p>
+            <div class="input-area">
+              <div class="url-input-wrapper soon-bar">
+                <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+                <input type="text" placeholder="Paste the full URL of the profile to analyze" disabled aria-disabled="true">
+                <button type="button" class="btn-primary btn-soon" disabled><span>Coming soon</span></button>
+              </div>
+            </div>
+          </section>
+          <section class="mode-slide" data-mode="youtube" role="tabpanel" aria-hidden="true">
+            <p class="product-tagline">Diagnose how AI-ready your channel and videos are, from titles and chapters to descriptions and transcripts.</p>
+            <div class="input-area">
+              <div class="url-input-wrapper soon-bar">
+                <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+                <input type="text" placeholder="Paste the full URL of the video to analyze" disabled aria-disabled="true">
+                <button type="button" class="btn-primary btn-soon" disabled><span>Coming soon</span></button>
+              </div>
+            </div>
+          </section>
           </div>
         </div>
         <footer class="landing-footer">
           <a href="v1/" title="Open the previous version (v1)">GEO Analyst v2.0</a>
-          <p class="landing-copyright">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</p>
+          <p class="landing-copyright">© 2026. Cheil NewTech Business Center All rights reserved.</p>
         </footer>
       </div>
       <div class="key-modal" id="key-panel" data-state="empty" hidden>
@@ -80,9 +115,9 @@
             <svg class="kp-ico-ok" width="44" height="44" viewBox="0 0 44 44" fill="none"><circle class="kp-ok-fill" cx="22" cy="22" r="20" fill="#16A34A"/><path class="kp-ok-check" d="M13.5 22.5l5.5 5.5 11.5-12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <h2 class="kp-title" id="kp-title">Enter API key to continue</h2>
-          <p class="kp-sub" id="kp-sub">GEO Analyst reads the page with your Gemini API key. It stays in this browser.</p>
+          <p class="kp-sub" id="kp-sub">GEO Analyst reads the page with your AI API key: Gemini, Claude or OpenAI. It stays in this browser.</p>
           <div class="api-key-row kp-row">
-            <input type="password" id="api-key-input" class="api-key-input" placeholder="Gemini API Key" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Gemini API key" aria-describedby="key-msg">
+            <input type="password" id="api-key-input" class="api-key-input" placeholder="API key (Gemini, Claude or OpenAI)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Gemini API key" aria-describedby="key-msg">
             <button type="button" class="btn-primary kp-continue" id="kp-continue" onclick="connectKey()" disabled><span class="kp-spin" aria-hidden="true"></span><svg class="kp-btn-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="kp-btn-label">Paste a key</span></button>
           </div>
           <p class="kp-msg" id="key-msg" aria-live="polite"></p>
@@ -106,7 +141,7 @@
           <div class="loading-logo app-brand">
             <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             <span class="loading-brand app-brand-name">GEO Analyst</span>
-            <span class="app-brand-copy">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</span>
+            <span class="app-brand-copy">© 2026. Cheil NewTech Business Center All rights reserved.</span>
           </div>
         </div>
         <div class="loading-body">
@@ -144,7 +179,7 @@
         <div class="dash-nav-left app-brand">
           <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
           <span class="dash-nav-brand app-brand-name">GEO Analyst</span>
-          <span class="app-brand-copy">© 2026. Cheil NewTech Business Center Jaehyeon Kim All rights reserved.</span>
+          <span class="app-brand-copy">© 2026. Cheil NewTech Business Center All rights reserved.</span>
         </div>
         <div class="dash-nav-right">
           <button class="btn-ghost" onclick="showLanding()">New Analysis</button>
@@ -156,9 +191,9 @@
   </div>
 
   <script src="engine.js?v=3"></script>
-  <script src="judge.js?v=5"></script>
+  <script src="judge.js?v=6"></script>
   <script src="fixes.js?v=8"></script>
   <script src="pdf.js?v=3"></script>
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

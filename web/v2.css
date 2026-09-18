@@ -77,9 +77,43 @@ a.logo-area:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 
 #key-panel[data-changing="1"] .kp-help-btn { display: none; }
 #key-panel[data-state="ok"] .kp-help-btn, #key-panel[data-state="ok"] .kp-steps { display: none; }
 /* The connected line sits under the URL bar out of flow, so showing or hiding it never moves the centered landing. */
-.landing-content > .input-area { position: relative; }
+.mode-slide > .input-area { position: relative; }
 /* Sits 50px above true center: the extra bottom margin shifts the centered block up by half its size. */
 .landing-content { margin-bottom: 100px; }
+
+/* Audit types. Platform is live; Social and YouTube are announced. Each type keys the whole
+   landing (mark, name, tabs, background) to its own colors, and the colors crossfade. */
+@property --key-a { syntax: '<color>'; inherits: true; initial-value: #3B82F6; }
+@property --key-b { syntax: '<color>'; inherits: true; initial-value: #2563EB; }
+@property --key-c { syntax: '<color>'; inherits: true; initial-value: #1D4ED8; }
+@property --key-bg { syntax: '<color>'; inherits: true; initial-value: #EFF6FF; }
+@property --name-a { syntax: '<color>'; inherits: true; initial-value: #1E3A5F; }
+@property --name-b { syntax: '<color>'; inherits: true; initial-value: #2563EB; }
+@property --name-c { syntax: '<color>'; inherits: true; initial-value: #60A5FA; }
+body { --key-a: #3B82F6; --key-b: #2563EB; --key-c: #1D4ED8; --key-bg: #EFF6FF; --name-a: #1E3A5F; --name-b: #2563EB; --name-c: #60A5FA; transition: --key-a .5s ease, --key-b .5s ease, --key-c .5s ease, --key-bg .5s ease, --name-a .5s ease, --name-b .5s ease, --name-c .5s ease; }
+body[data-mode="social"] { --key-a: #F58529; --key-b: #DD2A7B; --key-c: #8134AF; --key-bg: #FFF0F4; --name-a: #8134AF; --name-b: #DD2A7B; --name-c: #F58529; }
+body[data-mode="youtube"] { --key-a: #FF0000; --key-b: #E52D27; --key-c: #B31217; --key-bg: #FFF1F0; --name-a: #B31217; --name-b: #E52D27; --name-c: #FF0000; }
+.landing-container { background: linear-gradient(180deg, var(--white) 0%, var(--key-bg) 100%); }
+#geoaGlyph stop:nth-child(1) { stop-color: var(--key-a); }
+#geoaGlyph stop:nth-child(2) { stop-color: var(--key-b); }
+#geoaGlyph stop:nth-child(3) { stop-color: var(--key-c); }
+#screen-landing .product-name { background-image: linear-gradient(135deg, var(--name-a) 0%, var(--name-b) 45%, var(--name-c) 75%, var(--name-b) 100%); }
+.mode-tabs { display: inline-flex; gap: 2px; margin: 0 0 22px; padding: 2px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.mode-tab { padding: 4px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--gray-500); cursor: pointer; transition: color .2s ease; }
+.mode-tab:hover { color: var(--gray-700); }
+.mode-tab.active { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
+.mode-tab:focus-visible { outline: 2px solid var(--key-b); outline-offset: 2px; }
+/* The panels share one cell; the leaving one stays visible only while it slides out. */
+/* One fixed track: the wider tagline overflows it evenly instead of stretching the slide. */
+.mode-stage { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
+.mode-slide { grid-area: 1 / 1; width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; visibility: hidden; opacity: 0; pointer-events: none; }
+.mode-slide.active { visibility: visible; opacity: 1; pointer-events: auto; }
+.mode-slide.leaving { visibility: visible; opacity: 1; }
+/* Coming-soon types show the same bar as Platform, with the button in the Analyze position. */
+.soon-bar input { flex: 1; min-width: 0; border: none; outline: none; padding: 10px 4px; font: inherit; font-size: 15px; line-height: normal; background: transparent; }
+.soon-bar input:disabled { color: var(--gray-400); -webkit-text-fill-color: var(--gray-400); opacity: 1; cursor: default; }
+.soon-bar input::placeholder { color: var(--gray-400); }
+.soon-bar .btn-soon, .soon-bar .btn-soon:disabled { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); opacity: 1; cursor: default; }
 
 /* Brand bar on the loading and results screens: mark, name, then the copyright. */
 .app-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -99,7 +133,9 @@ a.logo-area:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 
 .key-connected:not([hidden]) { animation: kp-rise .36s .06s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 @keyframes kp-rise { from { opacity: 0; transform: translateY(-3px); } }
 .key-connected svg { vertical-align: -2px; margin-right: 2px; }
-.key-connected-label { color: #16A34A; }
+.key-connected .kc-ok, .key-connected .kc-off { display: none; }
+.key-connected[data-state="ok"] .kc-ok, .key-connected[data-state="off"] .kc-off { display: inline; }
+.key-connected[data-state="ok"] .key-connected-label { color: #16A34A; }
 .key-change { padding: 0; border: 0; background: none; font: inherit; color: var(--gray-400); cursor: pointer; }
 @media (max-width: 480px) { .key-modal-card { padding: 28px 20px 20px; } }
 

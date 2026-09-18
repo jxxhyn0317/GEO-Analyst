@@ -116,6 +116,7 @@ async function runAnalysis(url, apiKey) {
 
 async function geminiStage(result, apiKey) {
   progress(6);
+  document.getElementById('judge-step-text').textContent = `${JUDGE.providerName()} judgment`;
   note(`Asking ${JUDGE.MODEL} to judge headings, the opening, citable facts and first-hand experience`);
   const t1 = performance.now();
   const judgment = await JUDGE.judge(apiKey, result, note);
@@ -197,7 +198,10 @@ const STAGE_LABEL = { fetch: 'Opening the page', read: 'Reading the page', gemin
 const ACTION_LABEL = { retry: 'Try again', edit: 'Change the address', key: 'Change the API key' };
 let lastAudit = { url: '', result: null, stage: '' };
 
-function copyFor(e) { return ERROR_COPY[e.code] || ERROR_COPY.UNKNOWN; }
+function copyFor(e) {
+  const c = ERROR_COPY[e.code] || ERROR_COPY.UNKNOWN;
+  return JUDGE.provider() === 'gemini' ? c : { ...c, title: brand(c.title), body: brand(c.body), tips: c.tips?.map(t => brand(t)) };
+}
 
 function renderError(url, e, stage) {
   const c = copyFor(e);
@@ -205,7 +209,7 @@ function renderError(url, e, stage) {
   lastAudit.stage = stage;
   if (e.code === 'KEY_INVALID' || e.code === 'KEY_PERMISSION') {
     storeKeyOk(false);
-    setKeyUi('error', KEY_STATUS_COPY[e.code]);
+    setKeyUi('error', brand(KEY_STATUS_COPY[e.code]));
   }
   const geo = c.geo || e.crawlerImpact;
   showScreen('screen-dashboard');
@@ -439,8 +443,26 @@ const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').match
 function readKeyOk() { try { return localStorage.getItem(KEY_OK_STORE) === '1'; } catch { return false; } }
 function storeKeyOk(v) { try { v ? localStorage.setItem(KEY_OK_STORE, '1') : localStorage.removeItem(KEY_OK_STORE); } catch {} }
 
+// The line under the URL bar always says where the key stands: which model is connected, or none yet.
 function syncConnected() {
-  document.getElementById('key-connected').hidden = !(keyState === 'ok' && panelEl().hidden);
+  const line = document.getElementById('key-connected');
+  const ok = keyState === 'ok';
+  line.hidden = !panelEl().hidden;
+  line.dataset.state = ok ? 'ok' : 'off';
+  document.getElementById('key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} connected` : 'No API key connected';
+  document.getElementById('key-connected-action').textContent = ok ? 'Change' : 'Connect';
+}
+function keyLineAction() {
+  if (keyState === 'ok') { changeKey(); return; }
+  continueAfterKey = null;
+  openKeyPanel({ nudge: true });
+}
+// Copy is written for Gemini. Other providers get their own names in the same sentences.
+function brand(s, key) {
+  const provider = key ? JUDGE.detect(key) : JUDGE.provider();
+  if (provider === 'gemini' || !s) return s;
+  const p = key ? JUDGE.providerNameFor(key) : JUDGE.providerName();
+  return String(s).replace(/Google AI Studio/g, JUDGE.consoleName()).replace(/Google[’']s/g, p + '’s').replace(/Google/g, p).replace(/Gemini/g, p);
 }
 
 function setKeyUi(state, message = '') {
@@ -609,7 +631,7 @@ function connectKey() {
 async function checkKey(raw, { silent = false } = {}) {
   const key = raw.trim();
   if (!key) { setKeyUi('empty'); return false; }
-  if (!silent) setKeyUi('checking');
+  if (!silent) setKeyUi('checking', `Checking your key with ${JUDGE.vendorFor(key)}…`);
   const run = keyCheck = JUDGE.verifyKey(key);
   const res = await run;
   if (run !== keyCheck) return false;
@@ -636,7 +658,7 @@ async function checkKey(raw, { silent = false } = {}) {
   if (silent && (res.code === 'GEMINI_NETWORK' || res.code === 'GEMINI_TIMEOUT')) return keyState === 'ok';
   storeKeyOk(false);
   const stale = silent && (res.code === 'KEY_INVALID' || res.code === 'KEY_PERMISSION');
-  setKeyUi('error', stale ? 'Your saved key no longer works. Paste a new one.' : (KEY_STATUS_COPY[res.code] || KEY_STATUS_COPY.other));
+  setKeyUi('error', stale ? 'Your saved key no longer works. Paste a new one.' : brand(KEY_STATUS_COPY[res.code] || KEY_STATUS_COPY.other, key));
   return false;
 }
 
@@ -669,10 +691,51 @@ function onDialogKey(e) {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
 
+// ===== AUDIT TYPES =====
+// Platform is live; Social and YouTube are announced. Switching slides the panel sideways in
+// tab order and re-keys the landing colors through body[data-mode].
+const MODES = ['platform', 'social', 'youtube'];
+let landingMode = 'platform';
+function setMode(mode) {
+  if (!MODES.includes(mode) || mode === landingMode) return;
+  const dir = MODES.indexOf(mode) > MODES.indexOf(landingMode) ? 1 : -1;
+  const prev = document.querySelector(`.mode-slide[data-mode="${landingMode}"]`);
+  const next = document.querySelector(`.mode-slide[data-mode="${mode}"]`);
+  landingMode = mode;
+  document.body.dataset.mode = mode;
+  document.querySelectorAll('.mode-tab').forEach(t => {
+    const on = t.dataset.mode === mode;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('.mode-slide').forEach(s => { s.getAnimations().forEach(a => a.cancel()); s.classList.remove('leaving'); });
+  next.classList.add('active');
+  next.setAttribute('aria-hidden', 'false');
+  prev.classList.remove('active');
+  prev.setAttribute('aria-hidden', 'true');
+  if (reducedMotion() || !prev.animate) return;
+  prev.classList.add('leaving');
+  const out = prev.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-36 * dir}px)` }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+  const done = () => { prev.classList.remove('leaving'); out.cancel(); };
+  out.onfinish = done;
+  // Animations pause in background tabs; clear the leaving state regardless.
+  setTimeout(done, 400);
+  next.animate([{ opacity: 0, transform: `translateX(${36 * dir}px)` }, { opacity: 1, transform: 'none' }], { duration: 340, delay: 90, easing: EASE, fill: 'backwards' });
+}
+
 // ===== BOOT =====
 (() => {
   const urlInput = document.getElementById('url-input');
   const keyInput = document.getElementById('api-key-input');
+  document.querySelectorAll('.mode-tab').forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  document.querySelector('.mode-tabs').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const m = MODES[(MODES.indexOf(landingMode) + (e.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length];
+    setMode(m);
+    document.querySelector(`.mode-tab[data-mode="${m}"]`).focus();
+    e.preventDefault();
+  });
   urlInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) startAnalysis(); });
   urlInput.addEventListener('pointerdown', e => {
     if (keyState === 'ok') return;
@@ -700,6 +763,7 @@ function onDialogKey(e) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) returnedFromKeyTrip(); });
 
   const stored = readStoredKey();
+  if (stored) JUDGE.prime(stored);
   const q = new URLSearchParams(location.search).get('url');
   keyInput.value = stored;
   if (q) urlInput.value = q;
