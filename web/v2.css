@@ -3,7 +3,8 @@ body { background: var(--bg); }
 
 /* Landing */
 .logo-icon .geoa-mark, .loading-logo .geoa-mark { display: block; }
-a.logo-area { text-decoration: none; color: inherit; cursor: pointer; border-radius: 12px; }
+a.logo-area { text-decoration: none; color: inherit; cursor: pointer; border-radius: 12px; gap: 14px; margin-bottom: 20px; }
+#screen-landing .product-name { font-size: 34px; letter-spacing: -0.6px; }
 a.logo-area:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 4px; }
 .api-key-input.input-error { border-color: #EF4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
 .key-modal .api-key-input { transition: border-color .2s ease, box-shadow .2s ease; }
@@ -91,18 +92,26 @@ a.logo-area:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 
 @property --name-b { syntax: '<color>'; inherits: true; initial-value: #2563EB; }
 @property --name-c { syntax: '<color>'; inherits: true; initial-value: #60A5FA; }
 body { --key-a: #3B82F6; --key-b: #2563EB; --key-c: #1D4ED8; --key-bg: #EFF6FF; --name-a: #1E3A5F; --name-b: #2563EB; --name-c: #60A5FA; transition: --key-a .5s ease, --key-b .5s ease, --key-c .5s ease, --key-bg .5s ease, --name-a .5s ease, --name-b .5s ease, --name-c .5s ease; }
-body[data-mode="social"] { --key-a: #F58529; --key-b: #DD2A7B; --key-c: #8134AF; --key-bg: #FFF0F4; --name-a: #8134AF; --name-b: #DD2A7B; --name-c: #F58529; }
-body[data-mode="youtube"] { --key-a: #FF0000; --key-b: #E52D27; --key-c: #B31217; --key-bg: #FFF1F0; --name-a: #B31217; --name-b: #E52D27; --name-c: #FF0000; }
+body[data-mode="social"] { --key-a: #D96200; --key-b: #D10057; --key-c: #A3009B; --key-bg: #FBF3F8; --name-a: #5B2BC4; --name-b: #A3009B; --name-c: #D96200; }
+body[data-mode="youtube"] { --key-a: #CD2730; --key-b: #CD2A56; --key-c: #CC2C7B; --key-bg: #FCF2F4; --name-a: #CC2C7B; --name-b: #CD2A56; --name-c: #CD2730; }
 .landing-container { background: linear-gradient(180deg, var(--white) 0%, var(--key-bg) 100%); }
 #geoaGlyph stop:nth-child(1) { stop-color: var(--key-a); }
 #geoaGlyph stop:nth-child(2) { stop-color: var(--key-b); }
 #geoaGlyph stop:nth-child(3) { stop-color: var(--key-c); }
 #screen-landing .product-name { background-image: linear-gradient(135deg, var(--name-a) 0%, var(--name-b) 45%, var(--name-c) 75%, var(--name-b) 100%); }
+body[data-mode="social"] #screen-landing .product-name { background-image: linear-gradient(135deg, #C79A00 0%, #D96200 22%, #D10057 48%, #A3009B 72%, #5B2BC4 100%); }
+body[data-mode="social"] .soon-bar .btn-soon, body[data-mode="social"] .sp-cta { background: linear-gradient(135deg, #C79A00 0%, #D96200 20%, #D10057 50%, #A3009B 75%, #5B2BC4 100%); }
+/* The bar glow and outline take the active type’s key color. */
+#screen-landing .url-input-wrapper::before { background: linear-gradient(135deg, color-mix(in srgb, var(--key-a) 30%, transparent), color-mix(in srgb, var(--key-b) 22%, transparent), color-mix(in srgb, var(--key-c) 28%, transparent)); }
+#screen-landing .url-input-wrapper:hover { box-shadow: 0 2px 10px color-mix(in srgb, var(--key-b) 12%, transparent), 0 0 0 1px color-mix(in srgb, var(--key-b) 18%, transparent); }
+#screen-landing .url-input-wrapper:focus-within { box-shadow: 0 3px 14px color-mix(in srgb, var(--key-b) 18%, transparent), 0 0 0 1px color-mix(in srgb, var(--key-b) 28%, transparent); }
+#screen-landing .soon-bar:hover { cursor: pointer; }
 .mode-tabs { display: inline-flex; gap: 2px; margin: 0 0 22px; padding: 2px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
 .mode-tab { padding: 4px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--gray-500); cursor: pointer; transition: color .2s ease; }
 .mode-tab:hover { color: var(--gray-700); }
-.mode-tab.active { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
-.mode-tab:focus-visible { outline: 2px solid var(--key-b); outline-offset: 2px; }
+/* The active tab is the key color dimmed right down: a faint tint behind the deep end of the gradient. */
+.mode-tab.active { color: var(--key-c); background: color-mix(in srgb, var(--key-b) 10%, #FFFFFF); }
+.mode-tab:focus-visible { outline: 2px solid var(--gray-400); outline-offset: 2px; }
 /* The panels share one cell; the leaving one stays visible only while it slides out. */
 /* One fixed track: the wider tagline overflows it evenly instead of stretching the slide. */
 .mode-stage { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
@@ -111,9 +120,17 @@ body[data-mode="youtube"] { --key-a: #FF0000; --key-b: #E52D27; --key-c: #B31217
 .mode-slide.leaving { visibility: visible; opacity: 1; }
 /* Coming-soon types show the same bar as Platform, with the button in the Analyze position. */
 .soon-bar input { flex: 1; min-width: 0; border: none; outline: none; padding: 10px 4px; font: inherit; font-size: 15px; line-height: normal; background: transparent; }
-.soon-bar input:disabled { color: var(--gray-400); -webkit-text-fill-color: var(--gray-400); opacity: 1; cursor: default; }
+.soon-bar input { color: var(--gray-400); cursor: pointer; caret-color: transparent; }
 .soon-bar input::placeholder { color: var(--gray-400); }
-.soon-bar .btn-soon, .soon-bar .btn-soon:disabled { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); opacity: 1; cursor: default; }
+.soon-bar .btn-soon { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
+/* Coming-soon dialog, keyed to the audit type. */
+.sp-badge { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); color: var(--key-b); }
+.sp-cta { margin: 18px auto 0; padding: 9px 18px; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
+.sp-cta:hover { background: linear-gradient(135deg, var(--key-a), var(--key-c)); filter: brightness(1.05); }
+
+/* Elapsed seconds on the step that is waiting for the model. */
+.step-time { margin-left: auto; padding-left: 12px; font-size: 12px; font-weight: 500; color: var(--gray-400); font-variant-numeric: tabular-nums; }
+.step-item { display: flex; align-items: center; }
 
 /* Brand bar on the loading and results screens: mark, name, then the copyright. */
 .app-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -133,8 +150,8 @@ body[data-mode="youtube"] { --key-a: #FF0000; --key-b: #E52D27; --key-c: #B31217
 .key-connected:not([hidden]) { animation: kp-rise .36s .06s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 @keyframes kp-rise { from { opacity: 0; transform: translateY(-3px); } }
 .key-connected svg { vertical-align: -2px; margin-right: 2px; }
-.key-connected .kc-ok, .key-connected .kc-off { display: none; }
-.key-connected[data-state="ok"] .kc-ok, .key-connected[data-state="off"] .kc-off { display: inline; }
+.key-connected .kc-ok { display: none; }
+.key-connected[data-state="ok"] .kc-ok { display: inline; }
 .key-connected[data-state="ok"] .key-connected-label { color: #16A34A; }
 .key-change { padding: 0; border: 0; background: none; font: inherit; color: var(--gray-400); cursor: pointer; }
 @media (max-width: 480px) { .key-modal-card { padding: 28px 20px 20px; } }

@@ -190,7 +190,7 @@ ${JSON.stringify(input)}`;
       let wait = parseInt(resp.headers.get('retry-after'), 10) || 20;
       try { const e = await resp.clone().json(); const r = e.error?.details?.find(x => x.retryDelay); if (r) wait = parseInt(r.retryDelay, 10) || wait; } catch {}
       wait = Math.min(30, Math.max(5, wait));
-      if (note) note(`${PROVIDERS[active.provider].name} is busy, trying again in ${wait}s`, 'yellow');
+      if (note) note(`The model is busy, trying again in ${wait}s`, 'yellow');
       await new Promise(r => setTimeout(r, wait * 1000));
     }
     if (!resp.ok) throw failure(await errorOf(resp));

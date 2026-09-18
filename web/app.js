@@ -31,7 +31,6 @@ function startAnalysis() {
     return;
   }
   const apiKey = readStoredKey();
-  history.replaceState(null, '', `?url=${encodeURIComponent(url)}`);
   document.getElementById('loading-url').textContent = url;
   showScreen('screen-loading');
   runAnalysis(url, apiKey);
@@ -44,12 +43,40 @@ function resetLoading() {
   document.getElementById('progress-pct').textContent = '0%';
   document.getElementById('insights-feed').innerHTML = '';
 }
+let currentStep = 0;
+let shownPct = 0;
+function setPct(p) {
+  shownPct = p;
+  document.getElementById('progress-fill').style.width = p + '%';
+  document.getElementById('progress-pct').textContent = Math.round(p) + '%';
+}
 function progress(i) {
   const steps = document.querySelectorAll('.step-item');
-  steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); });
-  const p = Math.round(((i + 1) / steps.length) * 100);
-  document.getElementById('progress-fill').style.width = p + '%';
-  document.getElementById('progress-pct').textContent = p + '%';
+  currentStep = i;
+  steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); s.querySelector('.step-time')?.remove(); });
+  setPct(Math.round(((i + 1) / steps.length) * 100));
+}
+// The model answers in one reply, so while it works the bar keeps creeping toward the next
+// step, the active step shows elapsed seconds, and the steps advance on a schedule.
+function modelPacing() {
+  const steps = document.querySelectorAll('.step-item');
+  const t0 = performance.now();
+  const timers = [
+    setTimeout(() => progress(7), 3000),
+    setTimeout(() => { progress(8); note('Writing the diagnosis and next steps'); }, 7500),
+    setTimeout(() => note('Still working. Longer pages take more time.', 'yellow'), 18000),
+    setTimeout(() => note('Almost there. Waiting for the model to finish.', 'yellow'), 40000)
+  ];
+  const ticker = setInterval(() => {
+    const cap = Math.round(((currentStep + 2) / steps.length) * 100) - 2;
+    if (shownPct < cap) setPct(Math.min(cap, shownPct + 0.4));
+    const active = steps[currentStep];
+    if (!active) return;
+    let t = active.querySelector('.step-time');
+    if (!t) { t = document.createElement('span'); t.className = 'step-time'; active.appendChild(t); }
+    t.textContent = Math.floor((performance.now() - t0) / 1000) + 's';
+  }, 1000);
+  return () => { timers.forEach(clearTimeout); clearInterval(ticker); };
 }
 function note(text, color = 'blue') {
   const feed = document.getElementById('insights-feed');
@@ -65,7 +92,8 @@ function finishLoading() {
   document.getElementById('progress-fill').style.width = '100%';
   document.getElementById('progress-pct').textContent = '100%';
 }
-const tick = () => new Promise(r => setTimeout(r, 260));
+// Pauses between steps so each measured score can be read as it lands.
+const tick = (ms = 850) => new Promise(r => setTimeout(r, ms));
 
 async function runAnalysis(url, apiKey) {
   resetLoading();
@@ -85,7 +113,7 @@ async function runAnalysis(url, apiKey) {
 
     progress(1);
     stage = 'read';
-    await tick();
+    await tick(500);
     let result;
     try { result = GEO.analyze(page.html, url, page); }
     catch (e) { throw new AuditError('PARSE', e.message); }
@@ -116,13 +144,15 @@ async function runAnalysis(url, apiKey) {
 
 async function geminiStage(result, apiKey) {
   progress(6);
-  document.getElementById('judge-step-text').textContent = `${JUDGE.providerName()} judgment`;
-  note(`Asking ${JUDGE.MODEL} to judge headings, the opening, citable facts and first-hand experience`);
+  note('Reading the page like an answer engine: heading labels, the opening, citable facts');
   const t1 = performance.now();
-  const judgment = await JUDGE.judge(apiKey, result, note);
+  const stopPacing = modelPacing();
+  let judgment;
+  try { judgment = await JUDGE.judge(apiKey, result, note); }
+  finally { stopPacing(); }
   GEO.applyJudgment(result, judgment);
-  note(`Gemini judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
-  progress(7);
+  note(`AI judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
+  progress(9);
   note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
   finishLoading();
   currentData = result;
@@ -445,12 +475,13 @@ function storeKeyOk(v) { try { v ? localStorage.setItem(KEY_OK_STORE, '1') : loc
 
 // The line under the URL bar always says where the key stands: which model is connected, or none yet.
 function syncConnected() {
-  const line = document.getElementById('key-connected');
   const ok = keyState === 'ok';
-  line.hidden = !panelEl().hidden;
-  line.dataset.state = ok ? 'ok' : 'off';
-  document.getElementById('key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} connected` : 'No API key connected';
-  document.getElementById('key-connected-action').textContent = ok ? 'Change' : 'Connect';
+  document.querySelectorAll('.key-connected').forEach(line => {
+    line.hidden = !panelEl().hidden;
+    line.dataset.state = ok ? 'ok' : 'off';
+    line.querySelector('.key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} connected` : 'No API key connected';
+    line.querySelector('.key-connected-action').textContent = ok ? 'Change' : 'Connect';
+  });
 }
 function keyLineAction() {
   if (keyState === 'ok') { changeKey(); return; }
@@ -724,8 +755,52 @@ function setMode(mode) {
   next.animate([{ opacity: 0, transform: `translateX(${36 * dir}px)` }, { opacity: 1, transform: 'none' }], { duration: 340, delay: 90, easing: EASE, fill: 'backwards' });
 }
 
+// ===== COMING SOON =====
+// Social and YouTube are announced, not open: touching their bar explains what is coming.
+const SOON_COPY = {
+  social: 'The Social audit isn’t open yet. It will check profiles, posts and captions the same way, and your API key will work here too. Platform is ready today.',
+  youtube: 'The YouTube audit isn’t open yet. It will check titles, chapters, descriptions and transcripts the same way, and your API key will work here too. Platform is ready today.'
+};
+const soonEl = () => document.getElementById('soon-panel');
+function openSoonPanel(mode) {
+  const panel = soonEl();
+  document.getElementById('sp-sub').textContent = SOON_COPY[mode] || SOON_COPY.social;
+  if (panel.hidden) {
+    panel.hidden = false;
+    if (!reducedMotion() && panel.animate) {
+      panel.querySelector('.key-modal-backdrop').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+      panel.querySelector('.key-modal-card').animate([{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: EASE });
+    }
+  }
+  panel.querySelector('.sp-cta').focus({ preventScroll: true });
+}
+function closeSoonPanel(goPlatform = false) {
+  const panel = soonEl();
+  if (panel.hidden) return;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    panel.hidden = true;
+    document.activeElement?.blur();
+    if (goPlatform) setMode('platform');
+  };
+  if (reducedMotion() || !panel.animate) { finish(); return; }
+  panel.querySelector('.key-modal-backdrop').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+  const a = panel.querySelector('.key-modal-card').animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(0.98)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+  a.onfinish = finish;
+  setTimeout(finish, 350);
+}
+
 // ===== BOOT =====
 (() => {
+  document.querySelectorAll('.soon-bar').forEach(bar => {
+    const mode = bar.closest('.mode-slide').dataset.mode;
+    bar.addEventListener('pointerdown', e => { e.preventDefault(); openSoonPanel(mode); });
+    bar.querySelector('input').addEventListener('focus', () => openSoonPanel(mode));
+    bar.querySelector('.btn-soon').addEventListener('click', () => openSoonPanel(mode));
+  });
+  soonEl().addEventListener('keydown', e => { if (e.key === 'Escape') closeSoonPanel(); });
   const urlInput = document.getElementById('url-input');
   const keyInput = document.getElementById('api-key-input');
   document.querySelectorAll('.mode-tab').forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
@@ -766,11 +841,14 @@ function setMode(mode) {
   if (stored) JUDGE.prime(stored);
   const q = new URLSearchParams(location.search).get('url');
   keyInput.value = stored;
-  if (q) urlInput.value = q;
+  // A shared ?url= link runs once; the address is cleared so a refresh returns to the landing.
+  if (q) { urlInput.value = q; history.replaceState(null, '', location.pathname); }
   if (stored && readKeyOk()) {
     setKeyUi('ok');
     // A shared ?url= link only auto-runs once the saved key is confirmed again.
     checkKey(stored, { silent: true }).then(ok => { if (ok && q) startAnalysis(); });
   } else if (stored) checkKey(stored, { silent: true });
   else setKeyUi('empty');
+  // Fills the line under every audit type, including the ones no key check touches.
+  syncConnected();
 })();

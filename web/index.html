@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=46">
+  <link rel="stylesheet" href="v2.css?v=54">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -41,7 +41,7 @@
         <div class="landing-content">
           <a class="logo-area" href="./" title="Reload GEO Analyst">
             <div class="logo-icon">
-              <svg class="geoa-mark" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
+              <svg class="geoa-mark" width="44" height="44" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             </div>
             <h1 class="product-name">GEO Analyst</h1>
           </a>
@@ -65,9 +65,9 @@
                 <span>Analyze</span>
               </button>
             </div>
-            <p class="key-connected" id="key-connected" data-state="off" hidden>
-              <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="kc-off" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4.5" stroke="#CBD5E1" stroke-width="1.6" stroke-dasharray="2.4 2.2"/></svg>
-              <span class="key-connected-label" id="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change" id="key-connected-action" onclick="keyLineAction()">Connect</button>
+            <p class="key-connected" data-state="off" hidden>
+              <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
             </p>
           </div>
           </section>
@@ -79,9 +79,13 @@
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-                <input type="text" placeholder="Paste the full URL of the profile to analyze" disabled aria-disabled="true">
-                <button type="button" class="btn-primary btn-soon" disabled><span>Coming soon</span></button>
+                <input type="text" placeholder="Paste the full URL of the profile to analyze" readonly aria-disabled="true">
+                <button type="button" class="btn-primary btn-soon"><span>Coming soon</span></button>
               </div>
+            <p class="key-connected" data-state="off" hidden>
+              <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
+            </p>
             </div>
           </section>
           <section class="mode-slide" data-mode="youtube" role="tabpanel" aria-hidden="true">
@@ -92,9 +96,13 @@
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-                <input type="text" placeholder="Paste the full URL of the video to analyze" disabled aria-disabled="true">
-                <button type="button" class="btn-primary btn-soon" disabled><span>Coming soon</span></button>
+                <input type="text" placeholder="Paste the full URL of the video to analyze" readonly aria-disabled="true">
+                <button type="button" class="btn-primary btn-soon"><span>Coming soon</span></button>
               </div>
+            <p class="key-connected" data-state="off" hidden>
+              <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
+            </p>
             </div>
           </section>
           </div>
@@ -132,6 +140,20 @@
           <button type="button" class="kp-cancel" onclick="cancelKeyChange()">Keep the current key</button>
         </div>
       </div>
+      <div class="key-modal soon-modal" id="soon-panel" hidden>
+        <div class="key-modal-backdrop" onclick="closeSoonPanel()"></div>
+        <div class="key-modal-card" role="dialog" aria-modal="true" aria-labelledby="sp-title" aria-describedby="sp-sub">
+          <button type="button" class="kp-close" aria-label="Close" onclick="closeSoonPanel()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <div class="kp-badge sp-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h2 class="kp-title" id="sp-title">Coming soon</h2>
+          <p class="kp-sub" id="sp-sub"></p>
+          <button type="button" class="btn-primary sp-cta" onclick="closeSoonPanel(true)">Try the Platform audit</button>
+        </div>
+      </div>
     </div>
 
     <!-- Screen 2: Loading -->
@@ -155,14 +177,16 @@
               <span class="progress-pct" id="progress-pct">0%</span>
             </div>
             <div class="steps-list" id="steps-list">
-              <div class="step-item" data-step="0"><span class="step-indicator"></span><span class="step-text">Fetching the page's raw HTML</span></div>
+              <div class="step-item" data-step="0"><span class="step-indicator"></span><span class="step-text">Reading the page the way AI crawlers do</span></div>
               <div class="step-item" data-step="1"><span class="step-indicator"></span><span class="step-text">Parsing headings, text and markup</span></div>
               <div class="step-item" data-step="2"><span class="step-indicator"></span><span class="step-text">D1 · URL and page context</span></div>
               <div class="step-item" data-step="3"><span class="step-indicator"></span><span class="step-text">D2 · Page structure</span></div>
               <div class="step-item" data-step="4"><span class="step-indicator"></span><span class="step-text">D3 · Answerability and content depth</span></div>
               <div class="step-item" data-step="5"><span class="step-indicator"></span><span class="step-text">D4 · Schema markup</span></div>
-              <div class="step-item" data-step="6"><span class="step-indicator"></span><span class="step-text" id="judge-step-text">Gemini judgment</span></div>
-              <div class="step-item" data-step="7"><span class="step-indicator"></span><span class="step-text">Report ready</span></div>
+              <div class="step-item" data-step="6"><span class="step-indicator"></span><span class="step-text">Reading heading labels and the opening</span></div>
+              <div class="step-item" data-step="7"><span class="step-indicator"></span><span class="step-text">Weighing citable facts and first-hand experience</span></div>
+              <div class="step-item" data-step="8"><span class="step-indicator"></span><span class="step-text">Writing the diagnosis and next steps</span></div>
+              <div class="step-item" data-step="9"><span class="step-indicator"></span><span class="step-text">Report ready</span></div>
             </div>
           </div>
           <div class="loading-insights">
@@ -191,9 +215,9 @@
   </div>
 
   <script src="engine.js?v=3"></script>
-  <script src="judge.js?v=6"></script>
+  <script src="judge.js?v=7"></script>
   <script src="fixes.js?v=8"></script>
   <script src="pdf.js?v=3"></script>
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>
