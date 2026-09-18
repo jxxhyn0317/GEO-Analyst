@@ -39,7 +39,10 @@ function startAnalysis() {
 // ===== LOADING SCREEN =====
 function resetLoading() {
   document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active', 'done'));
+  stopPct();
+  pctNow = pctAim = 0;
   const fill = document.getElementById('progress-fill');
+  fill.style.transition = '';
   fill.style.width = '0%';
   fill.classList.remove('done');
   document.getElementById('progress-pct')._count?.();
@@ -47,12 +50,41 @@ function resetLoading() {
   document.getElementById('insights-feed').innerHTML = '';
 }
 let currentStep = 0;
-let shownPct = 0;
-function setPct(p) {
-  shownPct = p;
-  document.getElementById('progress-fill').style.width = p + '%';
-  countTo(document.getElementById('progress-pct'), Math.round(p), v => `${v}%`, 480);
+
+// ===== THE PROGRESS BAR =====
+// A stalled bar feels slower than a slow one, so this one never stands still. Each step owns a
+// band of the track and the fill eases across its band over that step's own expected time: a
+// short measuring step crosses briskly, the long model step keeps inching for as long as it
+// takes. It approaches the far edge without crossing it, so when the next step lands there is
+// nothing to jump over and the motion simply picks up again. The number follows the fill rather
+// than counting on its own, so the two can never disagree.
+let pctNow = 0, pctAim = 0, pctTau = 400, pctRaf = 0, pctLast = 0;
+function aimPct(target, seconds = 1) {
+  pctAim = Math.max(pctAim, Math.min(100, target));
+  // Not /3. Easing all the way to the edge inside the step leaves a long decelerating tail, and
+  // the bar reads as fast-slow-fast-slow. At /1.6 it covers about four fifths of the band in the
+  // step's own time and is still moving briskly when the next one lands, so the pace stays even.
+  pctTau = Math.max(150, seconds * 1000 / 1.6);
+  if (reducedMotion()) { pctNow = pctAim; drawPct(); return; }
+  if (!pctRaf) { pctLast = performance.now(); pctRaf = requestAnimationFrame(pctFrame); }
 }
+function pctFrame(now) {
+  const dt = Math.min(120, now - pctLast);
+  pctLast = now;
+  const gap = pctAim - pctNow;
+  if (gap > 0.01) {
+    pctNow += gap * (1 - Math.exp(-dt / pctTau));
+    drawPct();
+  }
+  pctRaf = requestAnimationFrame(pctFrame);
+}
+function drawPct() {
+  document.getElementById('progress-fill').style.width = pctNow.toFixed(2) + '%';
+  const el = document.getElementById('progress-pct');
+  const v = `${Math.floor(pctNow)}%`;
+  if (el.textContent !== v) el.textContent = v;
+}
+function stopPct() { if (pctRaf) cancelAnimationFrame(pctRaf); pctRaf = 0; }
 
 // Counts a figure up to its value instead of snapping to it. Reading the number climb is what
 // makes a measurement feel measured rather than printed.
@@ -79,11 +111,14 @@ function countFromZero(el, ms) {
   el.textContent = '0';
   countTo(el, to, String, ms);
 }
-function progress(i) {
+// `seconds` is how long this step is expected to take, which is what sets the pace across its
+// band. Guessing a little long is safe: the bar eases and keeps moving. Guessing short is what
+// makes it arrive early and then sit there.
+function progress(i, seconds = 1) {
   const steps = document.querySelectorAll('.step-item');
   currentStep = i;
   steps.forEach((s, k) => { s.classList.toggle('done', k < i); s.classList.toggle('active', k === i); s.querySelector('.step-time')?.remove(); });
-  setPct(Math.round(((i + 1) / steps.length) * 100));
+  aimPct(((i + 1) / steps.length) * 100, seconds);
 }
 // The model answers in one reply, so while it works the bar keeps creeping toward the next
 // step, the active step shows elapsed seconds, and the steps advance on a schedule.
@@ -91,14 +126,15 @@ function modelPacing() {
   const steps = document.querySelectorAll('.step-item');
   const t0 = performance.now();
   const timers = [
-    setTimeout(() => progress(7), 3000),
-    setTimeout(() => { progress(8); note('Writing the diagnosis and next steps'); }, 7500),
+    setTimeout(() => progress(7, 5), 3000),
+    setTimeout(() => { progress(8, 12); note('Writing the diagnosis and next steps'); }, 7500),
     setTimeout(() => note('Still working. Longer pages take more time.', 'yellow'), 18000),
     setTimeout(() => note('Almost there. Waiting for the model to finish.', 'yellow'), 40000)
   ];
   const ticker = setInterval(() => {
-    const cap = Math.round(((currentStep + 2) / steps.length) * 100) - 2;
-    if (shownPct < cap) setPct(Math.min(cap, shownPct + 0.4));
+    // However long the model takes, the bar keeps reaching into the next band, slowly enough
+    // that it never runs out of track before the answer arrives.
+    aimPct(Math.min(((currentStep + 2) / steps.length) * 100 - 2, 96), 30);
     const active = steps[currentStep];
     if (!active) return;
     let t = active.querySelector('.step-time');
@@ -118,7 +154,12 @@ function note(text, color = 'blue') {
 }
 function finishLoading() {
   document.querySelectorAll('.step-item').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  // The ending is the part people remember, so the last stretch is one clean glide rather than
+  // the easing tail, which would crawl the final few percent.
+  stopPct();
+  pctNow = pctAim = 100;
   const fill = document.getElementById('progress-fill');
+  fill.style.transition = 'width .45s cubic-bezier(0.22, 1, 0.36, 1)';
   fill.style.width = '100%';
   fill.classList.add('done');
   countTo(document.getElementById('progress-pct'), 100, v => `${v}%`, 420);
@@ -131,7 +172,7 @@ async function runAnalysis(url, apiKey) {
   lastAudit = { url, result: null, stage: 'fetch' };
   let stage = 'fetch';
   try {
-    progress(0);
+    progress(0, 2.5);
     note(`Requesting ${new URL(url).hostname}`);
     const t0 = performance.now();
     const resp = await fetch(`api/fetch?url=${encodeURIComponent(url)}`).catch(e => { throw new AuditError('NETWORK', e.message); });
@@ -142,7 +183,7 @@ async function runAnalysis(url, apiKey) {
     if (page.redirects?.length) note(`Followed ${page.redirects.length} redirect${page.redirects.length > 1 ? 's' : ''} to ${page.finalUrl}`, 'yellow');
     if (page.truncated) note('HTML larger than 4 MB; measured the first 4 MB', 'yellow');
 
-    progress(1);
+    progress(1, 0.6);
     stage = 'read';
     await tick(500);
     let result;
@@ -153,13 +194,13 @@ async function runAnalysis(url, apiKey) {
     note(`${result.measure.headings.length} content headings · ${result.measure.substantiveChars.toLocaleString('en-US')} chars of substantive text`);
     if (result.measure.jsHeavy) note('Very little text in the raw HTML; the content likely renders with JavaScript', 'red');
 
-    progress(2); await tick();
+    progress(2, 0.85); await tick();
     note(`D1 URL & Page Context: ${d1.score}/100`, colorOf(d1.score));
-    progress(3); await tick();
+    progress(3, 0.85); await tick();
     note(`D2 Page Structure: ${d2.score}/100`, colorOf(d2.score));
-    progress(4); await tick();
+    progress(4, 0.85); await tick();
     note(`D3 Answerability & Content Depth: ${d3.score}/100`, colorOf(d3.score));
-    progress(5); await tick();
+    progress(5, 0.85); await tick();
     note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
 
     stage = 'gemini';
@@ -174,7 +215,7 @@ async function runAnalysis(url, apiKey) {
 }
 
 async function geminiStage(result, apiKey) {
-  progress(6);
+  progress(6, 4);
   note('Reading the page like an answer engine: heading labels, the opening, citable facts');
   const t1 = performance.now();
   const stopPacing = modelPacing();
@@ -390,20 +431,19 @@ function renderDashboard(d) {
         <div class="hero-meta hero-meta-right">
           <div class="hero-url-label">Analyzed URL</div>
           <a class="hero-url-link" href="${GEO.esc(d.url)}" target="_blank" rel="noopener" title="${GEO.esc(d.url)}">${GEO.esc(d.url)}</a>
-          <div class="hero-timestamp">Analyzed ${GEO.esc(when)} · single page, raw HTML</div>
+          <div class="hero-timestamp">Analyzed ${GEO.esc(when)}</div>
         </div>
       </div>
       <div class="hero-badge-row"><span class="hero-badge badge-${sc}">${statusLabelFor(sc)}</span></div>
       <h2 class="hero-headline">${GEO.esc(t.headline)}</h2>
       <div class="hero-strengths-weaknesses">
-        <div class="sw-column"><h4>Strengths</h4>
+        <div class="sw-column"><h4 class="sw-good">Strengths</h4>
           ${(t.strengths.length ? t.strengths : ['No checklist group earns full marks yet']).map(s => `<div class="sw-item"><span class="sw-icon green">✓</span><span>${GEO.esc(s)}</span></div>`).join('')}
         </div>
-        <div class="sw-column"><h4>Weaknesses</h4>
+        <div class="sw-column"><h4 class="sw-bad">Weaknesses</h4>
           ${(t.weaknesses.length ? t.weaknesses : ['No failed checks']).map(w => `<div class="sw-item"><span class="sw-icon red">✗</span><span>${GEO.esc(w)}</span></div>`).join('')}
         </div>
       </div>
-      <p class="hero-method">Weights: D1 15% · D2 35% · D3 35% · D4 15%. Every point is a binary check or a stated band; judgment items and diagnosis text by ${JUDGE.MODEL}.</p>
     </section>
 
     <h3 class="section-title">Score Breakdown</h3>
