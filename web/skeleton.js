@@ -16,59 +16,72 @@ const SKEL = (() => {
     const chrome = nodes.filter(n => n.chrome);
     const readable = body.filter(n => !HOLE.has(n.kind)).reduce((s, n) => s + n.chars, 0);
     const holes = body.filter(n => HOLE.has(n.kind)).length;
+    const host = (() => { try { return new URL(d.url).host; } catch { return ''; } })();
 
     return `
       <div class="skel">
         <div class="skel-head">
-          <div class="skel-title">What the model receives</div>
-          <p class="skel-sub">The page in document order, sized by how much text each part actually offers. Grey means nothing to read.</p>
+          <div class="skel-title">The page, as a model receives it</div>
+          <div class="skel-key">
+            <span class="skel-key-item"><i class="kb kb-full"></i>it can read this</span>
+            <span class="skel-key-item"><i class="kb kb-void"></i>nothing here for it</span>
+          </div>
         </div>
         <div class="skel-scroll" id="skel-scroll">
-          <div class="skel-zone skel-zone-head" data-anchor="head">
-            <div class="skel-zone-label">&lt;head&gt; · invisible to a reader, read first by a model</div>
+          <div class="skel-hidden" data-anchor="head">
+            <div class="skel-hidden-tab">read before the page, never seen by a reader</div>
             ${head.map(h => `
-              <div class="skel-meta${h.present ? '' : ' is-missing'}" data-head="${GEO.esc(h.key)}">
+              <div class="skel-meta${h.present ? '' : ' is-missing'}">
                 <span class="skel-meta-key">${GEO.esc(h.label)}</span>
-                <span class="skel-meta-val">${h.present ? GEO.esc(clipText(h.text, 70)) : 'missing'}</span>
+                ${h.present
+                  ? `<span class="skel-meta-val">${GEO.esc(clipText(h.text, 54))}</span>`
+                  : '<span class="skel-meta-val">not there</span>'}
               </div>`).join('')}
           </div>
-          <div class="skel-zone">
-            <div class="skel-zone-label">body · ${fmtNum(readable)} characters it can quote${holes ? `, ${holes} places it cannot read` : ''}</div>
-            ${body.length ? body.map(row).join('') : '<div class="skel-empty">Nothing in the body survived as text. To a model this page is blank.</div>'}
+
+          <div class="skel-page">
+            <div class="skel-bar"><i></i><i></i><i></i><span>${GEO.esc(host)}</span></div>
+            <div class="skel-paper">
+              ${chrome.length ? `<div class="skel-chrome-strip" title="navigation">${'<i></i>'.repeat(Math.min(6, Math.max(3, chrome.length)))}</div>` : ''}
+              ${body.length ? body.map(row).join('') : '<div class="skel-blank">A reader sees a page here.<br>A model receives nothing.</div>'}
+              ${chrome.length ? '<div class="skel-chrome-strip skel-foot"><i></i><i></i><i></i></div>' : ''}
+            </div>
           </div>
-          ${chrome.length ? `<div class="skel-zone skel-zone-chrome">
-            <div class="skel-zone-label">navigation and footer · present, but not this page's content</div>
-            ${chrome.slice(0, 14).map(row).join('')}
-            ${chrome.length > 14 ? `<div class="skel-more">and ${chrome.length - 14} more</div>` : ''}
-          </div>` : ''}
+          <p class="skel-foot-note">${fmtNum(readable)} characters it can quote${holes ? ` · ${holes} ${holes === 1 ? 'place' : 'places'} it cannot read` : ''}</p>
         </div>
       </div>`;
   }
 
-  // Height carries the weight of the block, so a page that is mostly pictures looks mostly empty.
+  // Shapes are the page a reader sees. Fill is what the model gets from it. One rule, and it
+  // holds everywhere: a solid line is text it can quote, a hollow box is a place where a reader
+  // sees something and the model receives nothing at all.
   function row(n) {
-    const h = HOLE.has(n.kind) ? 26 : Math.max(10, Math.min(90, Math.round(n.chars / 10)));
+    const lit = `data-node="${n.id}"`;
     if (n.kind === 'heading') {
-      return `<div class="skel-row skel-h skel-h${n.level}" data-node="${n.id}"><span class="skel-lvl">H${n.level}</span><span class="skel-text">${GEO.esc(n.text)}</span></div>`;
+      const w = Math.max(28, Math.min(100, Math.round(n.chars * 1.6)));
+      return `<div class="wf wf-h wf-h${n.level}" ${lit}><b style="width:${w}%"></b><span class="wf-cap">${GEO.esc(clipText(n.text, 46))}</span></div>`;
     }
     if (n.kind === 'media') {
-      return `<div class="skel-row skel-hole" data-node="${n.id}" style="height:${h}px">
-        <span class="skel-hole-label">${n.alt ? `image, alt: ${GEO.esc(clipText(n.text, 60))}` : `${GEO.esc(n.tag)} with no alt text · a hole`}</span></div>`;
+      return `<div class="wf wf-img${n.alt ? ' has-alt' : ''}" ${lit}>
+        <div class="wf-box"><svg viewBox="0 0 40 24" preserveAspectRatio="none"><path d="M0 0 40 24M40 0 0 24" /></svg></div>
+        ${n.alt ? `<span class="wf-cap wf-alt">alt: ${GEO.esc(clipText(n.text, 44))}</span>` : '<span class="wf-cap wf-none">no alt text</span>'}
+      </div>`;
     }
     if (n.kind === 'links') {
-      return `<div class="skel-row skel-hole skel-links" data-node="${n.id}" style="height:${h}px">
-        <span class="skel-hole-label">links only${n.items ? `, ${n.items}` : ''} · nothing to quote</span></div>`;
+      return `<div class="wf wf-links" ${lit}>${'<i></i>'.repeat(Math.min(5, Math.max(2, n.items || 3)))}<span class="wf-cap wf-none">links only</span></div>`;
     }
     if (n.kind === 'table') {
-      return `<div class="skel-row skel-block skel-table" data-node="${n.id}" style="height:${h}px"><span class="skel-text">table, ${n.rows} rows · ${GEO.esc(clipText(n.text, 90))}</span></div>`;
+      return `<div class="wf wf-table" ${lit}>${'<i></i>'.repeat(8)}</div>`;
     }
-    if (n.kind === 'list') {
-      return `<div class="skel-row skel-block skel-list" data-node="${n.id}" style="height:${h}px"><span class="skel-text">${GEO.esc(clipText(n.text, 120))}</span></div>`;
-    }
-    return `<div class="skel-row skel-block" data-node="${n.id}" style="height:${h}px"><span class="skel-text">${GEO.esc(clipText(n.text, 150))}</span></div>`;
+    // text and lists become the lines a wireframe uses, as many as the block has to say
+    const lines = Math.max(1, Math.min(9, Math.round(n.chars / 55)));
+    const widths = ['100%', '96%', '99%', '92%', '97%', '88%', '100%', '94%', '70%'];
+    return `<div class="wf wf-text${n.kind === 'list' ? ' wf-list' : ''}" ${lit}>
+      ${Array.from({ length: lines }, (_, i) => `<b style="width:${i === lines - 1 ? '62%' : widths[i % widths.length]}"></b>`).join('')}
+    </div>`;
   }
 
-  const clipText = (t, n) => (t || '').length > n ? (t || '').slice(0, n - 1) + '…' : (t || '');
+  const clipText = (t, n) => (t || '').length > n ? (t || '').slice(0, n - 1) + '\u2026' : (t || '');
   const fmtNum = n => (n || 0).toLocaleString('en-US');
 
   // ---- linking evidence to the skeleton ----
@@ -114,8 +127,8 @@ const SKEL = (() => {
     clear();
     const where = locate(groupName, evidenceText);
     const els = [];
-    if (where.head) { const h = document.querySelector('.skel-zone-head'); if (h) els.push(h); }
-    where.nodes.forEach(id => { const el = document.querySelector(`.skel-row[data-node="${id}"]`); if (el) els.push(el); });
+    if (where.head) { const h = document.querySelector('.skel-hidden'); if (h) els.push(h); }
+    where.nodes.forEach(id => { const el = document.querySelector(`.wf[data-node="${id}"]`); if (el) els.push(el); });
     if (!els.length) return false;
     els.forEach(el => el.classList.add('is-lit'));
 
