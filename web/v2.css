@@ -164,6 +164,13 @@ a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
 .soon-bar input { flex: 1; min-width: 0; border: none; outline: none; padding: 10px 4px; font: inherit; font-size: 15px; line-height: normal; background: transparent; }
 .soon-bar input { color: var(--gray-400); cursor: pointer; caret-color: transparent; }
 .soon-bar input::placeholder { color: var(--gray-400); }
+/* The button was the last thing on the landing still painted blue on every type. It takes the
+   type's own colours like the tab, the mark and the background do, so choosing a type carries
+   all the way through to the act. The Coming soon button already worked this way. */
+#screen-landing .url-input-wrapper .btn-primary { color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
+#screen-landing .url-input-wrapper .btn-primary:hover { background: linear-gradient(135deg, var(--key-a), var(--key-c)); filter: brightness(1.06); }
+#screen-landing .url-input-wrapper .btn-primary:active { filter: brightness(0.94); }
+#screen-landing .url-input-wrapper .btn-primary:focus-visible { outline: 2px solid var(--key-b); outline-offset: 2px; }
 .soon-bar .btn-soon { display: inline-flex; align-items: center; gap: 6px; color: #FFFFFF; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }
 .soon-lock { flex: none; opacity: .9; }
 /* ===== LOADING SCREEN MOTION =====
@@ -512,3 +519,40 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .pdf-export .pdf-line { display: block; }
 .pdf-export *, .pdf-export *::before, .pdf-export *::after { animation: none !important; transition: none !important; }
 .pdf-spin { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; box-sizing: border-box; border: 2px solid rgba(37, 99, 235, 0.25); border-top-color: #2563EB; border-radius: 999px; animation: kp-spin .7s linear infinite; }
+
+/* ===== THE TYPE'S COLOURS, ALL THE WAY THROUGH =====
+   data-mode stays on <body> after the landing, so the progress screen and the report can read the
+   same variables. Only chrome moves: the wordmark, the bar, the active step, the frame around the
+   report, the buttons that are ours. Anything that carries a meaning keeps its own colour, because
+   a green tick that turned red on the Video tab would be telling the reader something false. So the
+   score ring, the score gauges, the pass and fail marks and the green, amber and red feed dots are
+   deliberately left alone. */
+
+/* The wordmark, wherever it appears. */
+.app-brand .app-brand-name { background-image: linear-gradient(135deg, var(--name-a) 0%, var(--name-b) 60%, var(--name-c) 100%); }
+
+/* Progress screen. */
+#screen-loading .progress-fill { background: linear-gradient(90deg, var(--key-a), var(--key-c)); }
+#screen-loading .progress-pct { color: var(--key-c); }
+#screen-loading .step-item.active { color: var(--key-c); background: color-mix(in srgb, var(--key-b) 8%, #FFFFFF); }
+#screen-loading .step-item.active .step-indicator { border-color: var(--key-b); background: var(--key-b); }
+#screen-loading .step-item.active .step-indicator::before { border-color: var(--key-b); }
+/* The neutral feed dot follows; the green, amber and red ones mean something and do not. */
+#screen-loading .insight-dot.blue { background: var(--key-b); }
+
+/* Report. */
+/* Export is a plain utility, not a statement of type, so it stays neutral. */
+#screen-dashboard .btn-outline { color: var(--gray-700); background: var(--white); border-color: var(--gray-200); }
+#screen-dashboard .btn-outline:hover { background: var(--gray-50); border-color: var(--gray-300); }
+/* The report itself is white. Tinting the sheet the score sits on made the reading feel coloured
+   before it was read. */
+#screen-dashboard .hero-section { background: var(--white); border-color: var(--gray-200); }
+#screen-dashboard a.hero-url-link { color: var(--key-c); background: color-mix(in srgb, var(--key-b) 7%, #FFFFFF); border-color: color-mix(in srgb, var(--key-b) 16%, #FFFFFF); }
+#screen-dashboard a.hero-url-link:hover { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); border-color: color-mix(in srgb, var(--key-b) 34%, #FFFFFF); }
+
+/* "for Instagram" beside the name on the progress screen and the report, matching the landing. */
+.app-for { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; flex: none; }
+.app-for[hidden] { display: none; }
+.app-for-word { font-size: 12px; font-weight: 500; color: var(--gray-900); }
+.app-for-mark { display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; color: var(--gray-900); }
+.app-for-logo { display: block; }

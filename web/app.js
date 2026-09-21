@@ -947,8 +947,8 @@ const MODES = ['platform', 'social', 'youtube'];
 // (see brand/README.md) and it is used as is; until then the name stands in as text.
 // ratio is the file's own aspect, so the box width is known before the image decodes.
 const TYPE_BRAND = {
-  social: { name: 'Instagram', height: 17, ratio: 148.36 / 32.8 },
-  youtube: { name: 'YouTube', height: 14, ratio: 381 / 86 }
+  social: { name: 'Instagram', height: 17, navHeight: 8, ratio: 148.36 / 32.8 },
+  youtube: { name: 'YouTube', height: 14, navHeight: 7, ratio: 381 / 86 }
 };
 let landingMode = 'platform';
 let modeToken = 0;
@@ -1009,7 +1009,31 @@ function setMode(mode) {
 
 // The type's own wordmark under the title. The mark cross-fades and the box glides to the new
 // width, so switching types reads as one movement instead of a swap.
+// The same "for Instagram" mark the landing shows, beside the name on the inner screens, so the
+// report looks like it belongs to the thing that was chosen.
+function setAppBrand(mode) {
+  const brand = TYPE_BRAND[mode];
+  ['loading-for', 'dash-for'].forEach(id => {
+    const slot = document.getElementById(id);
+    if (!slot) return;
+    slot.hidden = !brand;
+    if (!brand) return;
+    const mark = slot.querySelector('.app-for-mark');
+    if (mark.dataset.mode === mode) return;
+    mark.dataset.mode = mode;
+    mark.innerHTML = '';
+    const img = new Image();
+    img.className = 'app-for-logo';
+    img.alt = brand.name;
+    img.height = brand.navHeight;
+    img.onerror = () => { mark.textContent = brand.name; };
+    img.src = `brand/${mode}.svg`;
+    mark.appendChild(img);
+  });
+}
+
 function setSubBrand(mode) {
+  setAppBrand(mode);
   const line = document.getElementById('sub-brand');
   const mark = document.getElementById('sub-mark');
   const word = line.querySelector('.sub-for');
