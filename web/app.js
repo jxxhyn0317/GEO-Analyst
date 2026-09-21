@@ -514,7 +514,7 @@ function judgedTag(g) {
   return g.judged === 'heuristic' ? '<span class="judged-tag">heuristic</span>' : '';
 }
 
-function renderCheckGroup(g) {
+function renderCheckGroup(g, dimKey) {
   const color = colorOf(Math.round(g.points / g.max * 100));
   const rows = (g.checks || []).map(c => `
     <div class="check-row">
@@ -529,7 +529,7 @@ function renderCheckGroup(g) {
       <div class="evi-wrap"><div class="evi-body">${g.captures.map(renderCapture).join('')}</div></div>
     </details>` : '';
   return `
-    <div class="check-group">
+    <div class="check-group" data-gkey="${dimKey}:${GEO.esc(g.name)}">
       <div class="check-group-head">
         <span class="check-group-name">${GEO.esc(g.name)}${g.band ? judgedTag(g) : ''}${srcTag(g)}</span>
         <span class="check-group-pts">${g.points}<span class="mx"> / ${g.max}</span></span>
@@ -600,7 +600,7 @@ function renderDashboard(d) {
             <ul class="diag-list">${pd.diagnosis.map(x => `<li>${GEO.esc(x)}</li>`).join('')}</ul>
             <div class="score-breakdown">
               <div class="breakdown-header"><span class="breakdown-label">SCORING BREAKDOWN</span></div>
-              ${dim.breakdown.map(renderCheckGroup).join('')}
+              ${dim.breakdown.map(g => renderCheckGroup(g, dim.key)).join('')}
             </div>
             ${video ? '' : `<div class="ai-box" id="ai-${dim.key}"></div>`}
           </div>`;
@@ -641,7 +641,8 @@ at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
     rail.hidden = !own;
     rail.innerHTML = own ? SKEL.build(d) : '';
     document.getElementById('dash-split')?.classList.toggle('has-rail', own);
-    if (own) requestAnimationFrame(() => SKEL.fit());
+    // A frame if the tab is visible, a timer if it is not: one of the two always lands.
+    if (own) { requestAnimationFrame(() => SKEL.fit()); setTimeout(() => SKEL.fit(), 140); }
   }
 }
 

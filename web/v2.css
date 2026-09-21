@@ -611,13 +611,42 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .kb-none { background: rgba(252,165,165,.12); border: 1px dashed rgba(252,165,165,.50); }
 
 .skel-stage { flex: 1; min-height: 0; padding: 14px 18px; overflow: hidden; }
-.skel-fit { transform-origin: top left; }
+.skel-fit { transform-origin: top left; visibility: hidden; }
 
 .sk-sec { margin-bottom: 12px; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; }
 .sk-sec:last-child { margin-bottom: 0; }
 .sk-sec-t { margin: 0 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748B; }
 .sk-host { margin-left: 8px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #64748B; }
 .sk-sec.is-lit { box-shadow: 0 0 0 2px var(--lit-ring); }
+
+/* Everything in the drawing leads somewhere, so everything in it answers the pointer. */
+.sk-chip, .sk-card, .sk-head { cursor: pointer; }
+.sk-chip:hover, .sk-card:hover { filter: brightness(1.35); }
+.sk-head:hover { background: rgba(255,255,255,.07); }
+.sk-chip:focus-visible, .sk-card:focus-visible, .sk-head:focus-visible, .sk-fold:focus-visible {
+  outline: 2px solid var(--lit-ring); outline-offset: 1px;
+}
+.sk-fold {
+  margin-left: 2px; padding: 0 5px; border: 1px solid rgba(255,255,255,.18); border-radius: 5px;
+  background: rgba(255,255,255,.05); color: #94A3B8; font-size: 11px; line-height: 17px; cursor: pointer;
+  transition: transform .18s ease, color .18s ease;
+}
+.sk-fold:hover { color: #E2E8F0; }
+.sk-fold.open { transform: rotate(180deg); color: #E2E8F0; }
+.sk-fold[hidden] { display: none; }
+.sk-depth { margin-left: 8px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #64748B; }
+.skel-hint { margin-top: 5px; font-size: 11px; color: #64748B; }
+.sk-aside { margin-left: auto; color: #64748B; }
+.skel-key { flex-wrap: wrap; align-items: center; }
+.skel-note { margin-top: 8px; padding: 6px 9px; border-radius: 6px; background: rgba(255,255,255,.06); color: #CBD5E1; font-size: 11px; }
+.skel-note[hidden] { display: none; }
+
+/* The check the drawing just sent you to, so the jump lands somewhere visible. */
+.check-group.is-called { animation: called 1.4s ease; }
+@keyframes called {
+  0%, 70% { box-shadow: 0 0 0 2px var(--key-b); background: color-mix(in srgb, var(--key-b) 8%, transparent); }
+  100% { box-shadow: 0 0 0 2px transparent; background: transparent; }
+}
 
 .sk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .sk-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; max-width: 100%; }
@@ -663,6 +692,11 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .sk-head.is-lit .sk-htext, .sk-head.is-lit .sk-tag, .sk-blk.is-lit { color: #FFFFFF; }
 
 @media (max-width: 1180px) {
-  .dash-split.has-rail { grid-template-columns: minmax(0, 1fr); padding: 0; }
-  .dash-rail { position: static; height: 560px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
+  .dash-split.has-rail { grid-template-columns: minmax(0, 1fr); padding: 24px 24px 0; }
+  .dash-rail { position: static; height: 700px; margin: 0 auto 24px; width: 100%; max-width: 980px; }
+  .skel-fit { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0 14px; align-items: start; }
+  .skel-fit [data-anchor="structure"] { grid-column: 1; grid-row: 1 / span 2; }
+  .skel-fit [data-anchor="head"] { grid-column: 2; grid-row: 1; }
+  .skel-fit [data-anchor="wanted"] { grid-column: 2; grid-row: 2; margin-bottom: 0; }
+  .sk-grid { grid-template-columns: 1fr; }
 }
