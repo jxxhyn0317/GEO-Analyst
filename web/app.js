@@ -627,6 +627,7 @@ at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
     rail.hidden = video;
     rail.innerHTML = video ? '' : SKEL.build(d);
     document.getElementById('dash-split')?.classList.toggle('has-rail', !video);
+    if (!video) { requestAnimationFrame(() => SKEL.fit()); }
   }
 }
 
@@ -1243,6 +1244,7 @@ function closeSoonPanel() {
   positionModeIndicator(false);
   document.fonts?.ready.then(() => positionModeIndicator(false));
   new ResizeObserver(() => positionModeIndicator(false)).observe(document.querySelector('.mode-tabs'));
+  addEventListener('resize', () => { if (typeof SKEL !== 'undefined') SKEL.fit(); });
   document.querySelector('.mode-tabs').addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const m = MODES[(MODES.indexOf(landingMode) + (e.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length];

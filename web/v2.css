@@ -587,84 +587,83 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .num-unscored { font-size: 20px; font-weight: 600; color: var(--gray-400); letter-spacing: -0.2px; }
 
 /* ===== THE PAGE AS A MODEL RECEIVES IT =====
-   The shapes are the page a reader sees. The fill is what the model gets from it. A solid line is
-   text it can quote; a hollow box is a place where a reader sees something and the model receives
-   nothing. One rule, readable at a glance, which is the whole point of drawing it. */
+   The drawing says one thing: what the model has and what it does not. Solid ink is content it
+   holds; a red hollow box is a place where a reader sees something and the model receives
+   nothing. Length and quality are deliberately absent, because the score already carries those
+   and mixing them in is what made this unreadable the first time. */
 .dash-split { display: block; }
-.dash-split.has-rail { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 28px; align-items: start; max-width: none; padding: 0 28px; }
+.dash-split.has-rail { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 36px; align-items: start; max-width: none; padding: 0 36px; }
 .dash-split.has-rail .dash-content { max-width: none; margin: 0; padding-left: 0; padding-right: 0; }
-.dash-rail { position: sticky; top: 76px; height: calc(100vh - 100px); min-width: 0; }
+.dash-rail { position: sticky; top: 76px; height: calc(100vh - 104px); min-width: 0; }
 .dash-rail[hidden] { display: none; }
 
-.skel { display: flex; flex-direction: column; height: 100%; background: var(--white); border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; }
-.skel-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--gray-100); }
-.skel-title { font-size: 13px; font-weight: 700; color: var(--gray-800); letter-spacing: -0.1px; }
-.skel-key { display: flex; gap: 14px; margin-top: 8px; }
-.skel-key-item { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--gray-500); }
-.kb { width: 16px; height: 7px; border-radius: 2px; flex: none; }
-.kb-full { background: var(--gray-400); }
-.kb-void { border: 1px dashed var(--gray-300); background: repeating-linear-gradient(135deg, transparent, transparent 3px, var(--gray-100) 3px, var(--gray-100) 6px); }
-.skel-scroll { flex: 1; overflow-y: auto; padding: 16px 16px 20px; scroll-behavior: smooth; background: var(--gray-50); }
-.skel-scroll::-webkit-scrollbar { width: 6px; }
-.skel-scroll::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
+.skel { display: flex; flex-direction: column; height: 100%; background: var(--white); border: 1px solid var(--gray-200); border-radius: 16px; overflow: hidden; }
+.skel-head { padding: 18px 22px 14px; border-bottom: 1px solid var(--gray-100); }
+.skel-title { font-size: 13.5px; font-weight: 700; color: var(--gray-800); letter-spacing: -0.1px; }
+.skel-key { display: flex; gap: 16px; margin-top: 9px; }
+.skel-key-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--gray-500); }
+.kb { width: 18px; height: 9px; border-radius: 2px; flex: none; }
+.kb-has { background: var(--gray-600); }
+.kb-none { border: 1.5px dashed var(--red-300); background: var(--red-50); }
 
-/* The head: attached above the page, because that is where it sits in the model's reading. */
-.skel-hidden { padding: 10px 12px; border: 1px dashed var(--blue-300); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--blue-50); transition: box-shadow .2s ease; }
-.skel-hidden-tab { margin-bottom: 7px; font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--blue-600); }
-.skel-meta { display: flex; gap: 8px; padding: 2px 0; font-size: 10.5px; line-height: 1.5; }
-.skel-meta-key { flex: none; width: 84px; color: var(--blue-600); }
-.skel-meta-val { min-width: 0; color: var(--gray-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skel-meta.is-missing .skel-meta-val { color: var(--red-500); }
+/* The stage holds one page and scales it to fit, so nothing here ever needs scrolling. */
+.skel-stage { flex: 1; min-height: 0; padding: 18px 22px; background: var(--gray-50); overflow: hidden; }
+.skel-fit { transform-origin: top left; }
+
+.skel-hidden { padding: 11px 13px; border: 1.5px dashed var(--blue-300); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--blue-50); transition: box-shadow .2s ease; }
+.skel-hidden-tab { margin-bottom: 8px; font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--blue-600); }
+.skel-meta-grid { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.skel-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+.skel-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.skel-meta.has .skel-dot { background: var(--gray-600); }
+.skel-meta.has .skel-meta-key { color: var(--gray-700); }
+.skel-meta.none .skel-dot { border: 1.5px dashed var(--red-400); background: var(--white); }
+.skel-meta.none .skel-meta-key { color: var(--red-500); text-decoration: line-through; text-decoration-color: var(--red-200); }
 .skel-hidden.is-lit { box-shadow: inset 0 0 0 2px var(--key-b); }
 
-/* The page itself, in a browser frame so it reads as a page and not as a list. */
-.skel-page { border: 1px solid var(--gray-300); border-radius: 0 0 10px 10px; overflow: hidden; background: var(--white); }
-.skel-bar { display: flex; align-items: center; gap: 4px; padding: 7px 10px; background: var(--gray-100); border-bottom: 1px solid var(--gray-200); }
-.skel-bar i { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-300); flex: none; }
-.skel-bar span { margin-left: 6px; font-size: 9.5px; color: var(--gray-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skel-paper { padding: 14px 14px 18px; }
+.skel-page { border: 1.5px solid var(--gray-300); border-radius: 0 0 10px 10px; overflow: hidden; background: var(--white); }
+.skel-bar { display: flex; align-items: center; gap: 5px; padding: 8px 12px; background: var(--gray-100); border-bottom: 1px solid var(--gray-200); }
+.skel-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-300); flex: none; }
+.skel-bar span { margin-left: 8px; font-size: 10px; color: var(--gray-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skel-paper { padding: 16px 18px 20px; }
 
-.skel-chrome-strip { display: flex; gap: 6px; margin-bottom: 14px; opacity: .45; }
-.skel-chrome-strip i { height: 6px; flex: 1; border-radius: 3px; background: var(--gray-200); }
-.skel-foot { margin: 16px 0 0; }
+/* Every block is the same size. The drawing is about presence, not volume. */
+.wf { margin-bottom: 12px; padding: 3px; border-radius: 5px; transition: box-shadow .2s ease, background-color .2s ease; }
+.wf b { display: block; height: 6px; margin-bottom: 5px; border-radius: 3px; background: var(--gray-300); }
+.wf b.short { width: 58%; margin-bottom: 0; }
+.wf-cap { display: block; margin-top: 4px; font-size: 10px; line-height: 1.4; color: var(--gray-500); }
+.wf-cap.none { color: var(--red-500); }
 
-.wf { margin-bottom: 11px; padding: 2px; border-radius: 4px; transition: box-shadow .2s ease, background-color .2s ease; }
-.wf b { display: block; height: 5px; margin-bottom: 4px; border-radius: 2px; background: var(--gray-200); }
-.wf-cap { display: block; margin-top: 3px; font-size: 9.5px; line-height: 1.4; color: var(--gray-400); }
+.wf-h { margin: 18px 0 10px; }
+.wf-h b { background: var(--gray-800); margin-bottom: 0; }
+.wf-h1 b { height: 13px; width: 78%; }
+.wf-h2 b { height: 10px; width: 56%; }
+.wf-h3 b { height: 8px; width: 42%; }
+.wf-h .wf-cap { color: var(--gray-700); font-weight: 600; font-size: 10.5px; }
 
-.wf-h b { height: 9px; background: var(--gray-700); margin-bottom: 0; }
-.wf-h1 b { height: 13px; }
-.wf-h2 b { height: 10px; }
-.wf-h { margin-bottom: 9px; margin-top: 16px; }
-.wf-h .wf-cap { color: var(--gray-600); font-weight: 600; }
+.wf-img.has .wf-box { height: 44px; border-radius: 5px; background: var(--gray-200); }
+.wf-img.none .wf-box { height: 44px; display: flex; align-items: center; justify-content: center; border: 1.5px dashed var(--red-300); border-radius: 5px; background: var(--red-50); }
+.wf-img.none .wf-box span { font-size: 10px; font-weight: 600; color: var(--red-400); }
 
-.wf-text b:last-child { margin-bottom: 0; }
-.wf-list { padding-left: 10px; border-left: 2px solid var(--gray-100); }
+.wf-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wf-links i { width: 46px; height: 14px; border: 1.5px dashed var(--red-300); border-radius: 7px; background: var(--red-50); flex: none; }
+.wf-links .wf-cap { width: 100%; margin-top: 3px; }
 
-/* A hollow box is the whole idea: a reader sees a picture, the model gets nothing. */
-.wf-img .wf-box { height: 54px; border: 1px dashed var(--gray-300); border-radius: 4px; background: repeating-linear-gradient(135deg, transparent, transparent 5px, var(--gray-50) 5px, var(--gray-50) 10px); }
-.wf-img .wf-box svg { width: 100%; height: 100%; display: block; }
-.wf-img .wf-box path { stroke: var(--gray-200); stroke-width: .6; fill: none; vector-effect: non-scaling-stroke; }
-.wf-img.has-alt .wf-box { border-style: solid; border-color: var(--gray-200); }
-.wf-alt { color: var(--gray-500); }
-.wf-none { color: var(--red-400); }
+.wf-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.wf-table i { height: 13px; border-radius: 3px; background: var(--gray-200); }
 
-.wf-links { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.wf-links i { width: 42px; height: 13px; border: 1px dashed var(--gray-300); border-radius: 7px; flex: none; }
-.wf-links .wf-cap { width: 100%; margin-top: 2px; }
+.skel-blank { padding: 30px 16px; text-align: center; font-size: 12px; line-height: 1.7; color: var(--red-500); border: 1.5px dashed var(--red-300); border-radius: 8px; background: var(--red-50); }
 
-.wf-table { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
-.wf-table i { height: 11px; border-radius: 2px; background: var(--gray-100); border: 1px solid var(--gray-200); }
-
-.skel-blank { padding: 28px 14px; text-align: center; font-size: 11.5px; line-height: 1.7; color: var(--red-500); border: 1px dashed var(--red-200); border-radius: 8px; background: var(--red-50); }
-.skel-foot-note { margin: 12px 2px 0; font-size: 10.5px; color: var(--gray-500); }
+.skel-foot-note { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 22px 14px; border-top: 1px solid var(--gray-100); }
+.fn { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+.fn.has { color: var(--gray-600); background: var(--gray-100); }
+.fn.none { color: var(--red-600); background: var(--red-50); }
 
 .wf.is-lit { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); box-shadow: 0 0 0 2px var(--key-b); }
 .wf.is-lit b { background: var(--key-c); }
 .wf.is-lit .wf-cap { color: var(--gray-900); }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .dash-split.has-rail { grid-template-columns: minmax(0, 1fr); padding: 0; }
-  .dash-rail { position: static; height: auto; max-height: 460px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
+  .dash-rail { position: static; height: 520px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
 }
-@media (prefers-reduced-motion: reduce) { .skel-scroll { scroll-behavior: auto; } }
