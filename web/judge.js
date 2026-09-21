@@ -232,7 +232,7 @@ ${JSON.stringify(input)}`;
     return 'https://generativelanguage.googleapis.com/v1beta/interactions';
   }
 
-  function bodyFor(prompt, schema, maxTokens, thinking, video) {
+  function bodyFor(prompt, schema, maxTokens, thinking, video, tools) {
     if (active.provider === 'anthropic') return {
       model: active.model, max_tokens: maxTokens, temperature: 0,
       messages: [{ role: 'user', content: prompt }],
@@ -254,7 +254,8 @@ ${JSON.stringify(input)}`;
     return {
       model: active.model,
       input: video ? [{ type: 'text', text: prompt }, { type: 'video', uri: video }] : prompt,
-      response_format: { type: 'text', mime_type: 'application/json', schema: jsonSchema(schema) }
+      response_format: { type: 'text', mime_type: 'application/json', schema: jsonSchema(schema) },
+      ...(tools && tools.length ? { tools } : {})
     };
   }
 
@@ -286,10 +287,10 @@ ${JSON.stringify(input)}`;
 
   // One model request with a JSON schema: retries once on 429, and maps failures to
   // AuditError codes the app can explain.
-  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note, video } = {}) {
+  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note, video, tools } = {}) {
     prime(apiKey);
     if (video && active.legacy) throw new AuditError('VIDEO_UNSUPPORTED', 'the older API surface has no video input');
-    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking, video));
+    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking, video, tools));
     // Watching a video takes far longer than reading a page.
     const timeout = video ? 300000 : TIMEOUT_MS;
     let resp, repicked = false;
@@ -360,8 +361,13 @@ ${JSON.stringify(input.page)}`;
   }
 
   // Hands a public YouTube URL to the model and gets back observations about the video itself.
+  // The model sees the picture and hears the sound, but the title, description and chapter list
+  // live on the page around the player, which it cannot see. url_context lets Google fetch its
+  // own watch page so the model can read them.
   function watchVideo(apiKey, url, schema, prompt, note) {
-    return call(apiKey, prompt, schema, { maxTokens: 8192, thinking: 2048, note, video: url });
+    return call(apiKey, prompt, schema, {
+      maxTokens: 8192, thinking: 2048, note, video: url, tools: [{ type: 'url_context' }]
+    });
   }
 
   function suggest(apiKey, input, note) {

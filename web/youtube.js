@@ -95,8 +95,15 @@ const YTGEO = (() => {
   });
 
   // ---------- the prompt ----------
-  function prompt(url) {
-    return `You are a strict technical GEO (Generative Engine Optimization) auditor examining ONE public YouTube video. GEO asks whether an AI answer engine such as Perplexity or Google AI Overviews could find this video, read it, and quote a passage of it as an answer with a citation.
+  function prompt(url, known) {
+    const head = known && known.title
+      ? `The title and channel are already known and are given here, so judge them rather than looking for them:
+TITLE: ${known.title}
+CHANNEL: ${known.channel || ''}
+
+`
+      : '';
+    return head + `You are a strict technical GEO (Generative Engine Optimization) auditor examining ONE public YouTube video. GEO asks whether an AI answer engine such as Perplexity or Google AI Overviews could find this video, read it, and quote a passage of it as an answer with a citation.
 
 Watch the whole video. Report only what you observe. Do not score anything and do not flatter the video.
 
@@ -105,8 +112,10 @@ Rules that matter:
 - Never invent a quote, a timestamp, a title or a description. Guessing here is worse than saying you cannot tell.
 - If you cannot tell, set pass to false and write why in one short phrase, with "" for the quote.
 
-FIRST, the page metadata. Set metadataSeen to true ONLY if you can actually read this video's title and description. If you cannot see them, set metadataSeen to false, titleSeen to "", descriptionWords to -1, hashtagCount to -1, and set the pass of titleNamesSubject, titleIsSpecific, descriptionRestatesContent and listedPublic to false with why = "metadata not visible". Do not reconstruct them from the spoken content.
-- titleSeen: the exact title.
+You have a tool that can open a public web page. Open the watch page URL at the bottom of these instructions and read the description and the chapter list from it. That is the only way to see them: the player shows you the picture and the sound, not the page around it.
+
+FIRST, the page metadata. Set metadataSeen to true ONLY if you actually read this video's description from the page. If the page will not open, set metadataSeen to false, descriptionWords to -1, hashtagCount to -1, and set the pass of descriptionRestatesContent and listedPublic to false with why = "page could not be read". Do not reconstruct a description from the spoken content.
+- titleSeen: the exact title, from the page or from the TITLE given above.
 - titleNamesSubject: does the title name the subject in words someone would search for.
 - titleIsSpecific: does it name the actual topic rather than only a hook such as "You won't believe this".
 - descriptionWords: how many words the description holds.
@@ -165,10 +174,21 @@ VIDEO: ${url}`;
     return { name, src, max, points, checks, captures: out, assessed };
   }
 
-  function build(o, url) {
+  // "Early" is relative. A 17 second advert clears an absolute 30 second bar without trying, and
+  // a 50 minute talk fails it however well it is made, which is how a rubric ends up rewarding
+  // the shortest thing in the room. These scale with the video and stay inside sane bounds.
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const answerBy = dur => Math.round(clamp(dur * 0.06, 20, 120));
+  const startBy = dur => Math.round(clamp(dur * 0.05, 10, 90));
+
+  function build(o, url, known) {
     const dur = Math.max(0, o.durationSeconds || 0);
+    const ansBar = answerBy(dur);
+    const startBar = startBy(dur);
+    const title = (known && known.title) || o.titleSeen || '';
+    const haveTitle = !!title;
     const ans = typeof o.answerAtSeconds === 'number' ? o.answerAtSeconds : -1;
-    const meta = o.metadataSeen === true;
+    const meta = o.metadataSeen === true;   // the description and chapters, read off the page
     const words = typeof o.descriptionWords === 'number' ? o.descriptionWords : -1;
     const tags = typeof o.hashtagCount === 'number' ? o.hashtagCount : -1;
     const chapters = o.chapterTitles || [];
@@ -182,13 +202,13 @@ VIDEO: ${url}`;
     // ---- D1 title, description, eligibility. Google puts these first. ----
     const d1 = [
       group('Title', GOOGLE, [
-        check(meta && o.titleNamesSubject?.pass, 5, 'The title names the subject in words people search for', o.titleSeen || ''),
-        check(meta && o.titleIsSpecific?.pass, 3, 'The title names the topic, not only a hook', o.titleIsSpecific?.why || ''),
-        check(meta && o.titleSeen && o.titleSeen.length <= 70, 2, 'Short enough not to be cut in a citation', meta && o.titleSeen ? `${o.titleSeen.length} characters` : '')
+        check(haveTitle && o.titleNamesSubject?.pass, 5, 'The title names the subject in words people search for', title),
+        check(haveTitle && o.titleIsSpecific?.pass, 3, 'The title names the topic, not only a hook', o.titleIsSpecific?.why || ''),
+        check(haveTitle && title.length <= 70, 2, 'Short enough not to be cut in a citation', haveTitle ? `${title.length} characters` : '')
       ], {
-        good: cap('The title carries the subject.', o.titleSeen),
-        bad: cap('The title does not carry the subject.', o.titleSeen || (o.titleNamesSubject?.why || 'title not visible'))
-      }, meta),
+        good: cap('The title carries the subject.', title),
+        bad: cap('The title does not carry the subject.', title || (o.titleNamesSubject?.why || 'title not readable'))
+      }, haveTitle),
       group('Description', GOOGLE, [
         check(words >= 60, 4, 'A description worth reading, not a line or two', words >= 0 ? `${words} words` : ''),
         check(words >= 250 && words <= 600, 5, 'In the length band that gets cited most (250 to 600 words)', ''),
@@ -234,11 +254,11 @@ VIDEO: ${url}`;
     // ---- D3 what actually gets quoted. Not covered by official guidance. ----
     const d3 = [
       group('A direct answer, early', JUDGE_SRC, [
-        check(ans >= 0 && ans <= 30, 5, 'A direct answer lands within 30 seconds', ans >= 0 ? `answer at ${fmt(ans)}` : 'no direct answer found'),
-        check(ans >= 0 && ans <= 60, 4, 'A direct answer lands within the first minute', '')
+        check(ans >= 0 && ans <= ansBar, 5, `A direct answer lands within the first ${fmt(ansBar)}`, ans >= 0 ? `answer at ${fmt(ans)} of ${fmt(dur)}` : 'no direct answer found'),
+        check(ans >= 0 && ans <= ansBar * 2, 4, `A direct answer lands within ${fmt(ansBar * 2)}`, '')
       ], {
         good: cap('The answer is stated, and early.', quoteOf(o.answerMoment)),
-        bad: cap('No direct answer near the top.', ans < 0 ? 'The video never states a direct answer.' : `The first direct answer is at ${fmt(ans)}.`)
+        bad: cap('No direct answer near the top.', ans < 0 ? 'The video never states a direct answer.' : `The first direct answer is at ${fmt(ans)}, past the ${fmt(ansBar)} mark this video is measured against.`)
       }),
       group('Sentences that stand alone', JUDGE_SRC, [
         check(quotable.length >= 5, 5, 'At least 5 sentences make sense on their own', `${quotable.length} found`),
@@ -262,10 +282,10 @@ VIDEO: ${url}`;
       }),
       group('The opening gets to it', JUDGE_SRC, [
         check(o.coverageStated?.pass, 4, 'The video says early what it will cover', o.coverageStated?.why || ''),
-        check(o.substanceStartsAtSeconds >= 0 && o.substanceStartsAtSeconds <= 30, 4, 'Content starts within 30 seconds', o.substanceStartsAtSeconds >= 0 ? `starts at ${fmt(o.substanceStartsAtSeconds)}` : '')
+        check(o.substanceStartsAtSeconds >= 0 && o.substanceStartsAtSeconds <= startBar, 4, `Content starts within ${fmt(startBar)}`, o.substanceStartsAtSeconds >= 0 ? `starts at ${fmt(o.substanceStartsAtSeconds)} of ${fmt(dur)}` : '')
       ], {
         good: cap('The opening sets up what follows.', quoteOf(o.coverageStated)),
-        bad: cap('The opening delays the content.', o.substanceStartsAtSeconds > 30 ? `Content starts at ${fmt(o.substanceStartsAtSeconds)}.` : (o.coverageStated?.why || 'the opening does not say what is coming'))
+        bad: cap('The opening delays the content.', o.substanceStartsAtSeconds > startBar ? `Content starts at ${fmt(o.substanceStartsAtSeconds)} of ${fmt(dur)}.` : (o.coverageStated?.why || 'the opening does not say what is coming'))
       })
     ];
 
@@ -320,6 +340,8 @@ VIDEO: ${url}`;
       fetchWarnings: [],
       observed: o,
       metadataSeen: meta,
+      knownTitle: title,
+      bars: { answerBy: ansBar, startBy: startBar },
       measure: { jsHeavy: false, substantiveChars: 0, url }
     };
     finalize(result, o);

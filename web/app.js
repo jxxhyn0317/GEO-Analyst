@@ -303,19 +303,29 @@ async function runVideoAnalysis(url, apiKey) {
   lastAudit = { url, result: null, stage: 'gemini' };
   try {
     progress(0, 3);
+    // oEmbed is YouTube's own public endpoint and needs no key. It is the only part of the page
+    // we can read for ourselves, and handing the model the real title saves it guessing at one.
+    let known = null;
+    try {
+      const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+      if (r.ok) { const j = await r.json(); known = { title: j.title, channel: j.author_name }; }
+    } catch {}
+    if (known?.title) note(known.title, 'green');
+    else note('YouTube did not return the title, so the model is asked to read it', 'yellow');
+
     note(`Sending ${url} to the model`);
-    note('The model watches the video itself; nothing is scraped from YouTube', 'blue');
+    note('The model watches the video and opens the watch page for what is written around it', 'blue');
     const t0 = performance.now();
     const stop = videoPacing();
     let obs;
-    try { obs = await JUDGE.watchVideo(apiKey, url, YTGEO.OBS_SCHEMA, YTGEO.prompt(url), note); }
+    try { obs = await JUDGE.watchVideo(apiKey, url, YTGEO.OBS_SCHEMA, YTGEO.prompt(url, known), note); }
     finally { stop(); }
 
-    const result = YTGEO.build(obs, url);
+    const result = YTGEO.build(obs, url, known);
     note(`Watched in ${((performance.now() - t0) / 1000).toFixed(1)}s`, 'green');
-    if (obs.titleSeen) note(obs.titleSeen);
     note(`${YTGEO.fmt(obs.durationSeconds)} long \u00b7 ${(obs.quotable || []).length} quotable lines \u00b7 ${(obs.citableFacts || []).length} citable facts`);
     if (!obs.chaptersKnown) note('Chapter markers were not visible, so that group is not scored', 'yellow');
+    if (!obs.metadataSeen) note('The description could not be read, so those groups are not scored', 'yellow');
     progress(8, 1);
     progress(9);
     note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
@@ -589,7 +599,9 @@ function renderDashboard(d) {
       <pre>model            ${GEO.esc(JUDGE.MODEL)}
 duration         ${GEO.esc(YTGEO.fmt(d.observed?.durationSeconds))}  (${GEO.esc(String(d.observed?.durationSeconds))}s)
 metadata seen    ${d.observed?.metadataSeen ? 'yes' : 'no'}
-title read       ${GEO.esc(d.observed?.titleSeen || '(none)')}
+title            ${GEO.esc(d.knownTitle || '(none)')}${d.knownTitle ? '  (from YouTube oEmbed)' : ''}
+answer bar       within ${GEO.esc(YTGEO.fmt(d.bars?.answerBy))}, scaled to this video's length
+intro bar        within ${GEO.esc(YTGEO.fmt(d.bars?.startBy))}
 description      ${GEO.esc(String(d.observed?.descriptionWords))} words
 chapters seen    ${d.observed?.chaptersKnown ? `yes, ${(d.observed?.chapterTitles || []).length}` : 'no'}
 quotable lines   ${(d.observed?.quotable || []).length}
