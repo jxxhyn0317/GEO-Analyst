@@ -479,6 +479,15 @@ function renderCapture(c) {
   return `<div class="cap cap-${c.tone}"><div class="cap-head">${badge}<span class="cap-caption">${c.caption}</span></div><pre>${c.code}</pre></div>`;
 }
 
+// Where a group's standard comes from. A reader weighing a score deserves to know which lines
+// are Google's own words and which are ours, rather than having them all look equally settled.
+function srcTag(g) {
+  if (!g.src) return '';
+  const official = g.src === 'Google guidance';
+  const unseen = g.assessed === false ? '<span class="src-tag src-unseen">not assessed</span>' : '';
+  return `<span class="src-tag${official ? ' src-official' : ''}">${GEO.esc(g.src)}</span>${unseen}`;
+}
+
 function judgedTag(g) {
   return g.judged === 'heuristic' ? '<span class="judged-tag">heuristic</span>' : '';
 }
@@ -500,7 +509,7 @@ function renderCheckGroup(g) {
   return `
     <div class="check-group">
       <div class="check-group-head">
-        <span class="check-group-name">${GEO.esc(g.name)}${g.band ? judgedTag(g) : ''}</span>
+        <span class="check-group-name">${GEO.esc(g.name)}${g.band ? judgedTag(g) : ''}${srcTag(g)}</span>
         <span class="check-group-pts">${g.points}<span class="mx"> / ${g.max}</span></span>
       </div>
       <div class="group-gauge"><div class="group-gauge-fill" style="width:${g.points / g.max * 100}%;background:${HEX[color]}"></div></div>
@@ -576,7 +585,8 @@ function renderDashboard(d) {
       ${video ? `<b>How this analysis works.</b> YouTube serves an automated fetch an empty shell, and a video's transcript is not available for a video you do not own, so nothing here is scraped. The model is given the public YouTube URL and watches the video itself, walking the timeline and reading the transcript as it goes.
       It reports only observations, each with a quote and a timestamp you can jump to. The rubric on this page turns those observations into points; the model never sets a score.
       ${d.assessedPoints < d.totalPoints ? `Of ${d.totalPoints} points in the rubric, ${d.assessedPoints} could be looked at in this video. Anything the model could not see is left out of the total rather than counted as a failure.` : ''}
-      Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Because a video is judged by watching rather than by counting markup, these readings are less independently checkable than a page audit; the timestamps are there so you can check them yourself.` : `<b>How this analysis works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
+      The weighting follows Google. YouTube's own help puts title and description at the top of what matters for discovery, Search Central names the description's timestamp list as the way key moments are found, and the generative AI guide says the only technical requirement is that a page be indexed and able to show a snippet. Those carry ${d.officialPoints} of the ${d.totalPoints} points, and each group on this page says whether its standard is Google's or ours.
+      Overall = D1×0.30 + D2×0.30 + D3×0.25 + D4×0.15, rounded. Because a video is judged by watching rather than by counting markup, these readings are less independently checkable than a page audit; the timestamps are there so you can check them yourself.` : `<b>How this analysis works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
       Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one weak example, a zero group shows the weak evidence only.
       Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.`}
     </div>`;
@@ -947,8 +957,8 @@ const MODES = ['platform', 'social', 'youtube'];
 // (see brand/README.md) and it is used as is; until then the name stands in as text.
 // ratio is the file's own aspect, so the box width is known before the image decodes.
 const TYPE_BRAND = {
-  social: { name: 'Instagram', height: 17, navHeight: 8, ratio: 148.36 / 32.8 },
-  youtube: { name: 'YouTube', height: 14, navHeight: 7, ratio: 381 / 86 }
+  social: { name: 'Instagram', height: 17, navHeight: 15, ratio: 148.36 / 32.8 },
+  youtube: { name: 'YouTube', height: 14, navHeight: 12, ratio: 381 / 86 }
 };
 let landingMode = 'platform';
 let modeToken = 0;

@@ -551,8 +551,24 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 #screen-dashboard a.hero-url-link:hover { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); border-color: color-mix(in srgb, var(--key-b) 34%, #FFFFFF); }
 
 /* "for Instagram" beside the name on the progress screen and the report, matching the landing. */
-.app-for { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; flex: none; }
+/* The name, the word "for" and the wordmark sit on one line. Two things are needed for that.
+   The name and the group have to share a baseline, which means asking for it on both: the row
+   around them centres everything else, and a lone baseline item has nothing to align to. And the
+   wrapper around the image has to take the image's own bottom edge as its baseline, which an
+   inline-flex box does not do, so it is an inline-block with no line box of its own. */
+/* The row aligns on the baseline so the name and the mark beside it sit on one line. Asking for
+   it item by item is not enough: a lone baseline item has nothing to align against. The mark and
+   the copyright are not on that line and stay centred. */
+.app-brand { align-items: baseline; }
+.app-brand .app-brand-copy { align-self: center; }
+.app-for { display: inline-flex; align-items: baseline; gap: 5px; margin-left: 3px; flex: none; }
 .app-for[hidden] { display: none; }
 .app-for-word { font-size: 12px; font-weight: 500; color: var(--gray-900); }
-.app-for-mark { display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; color: var(--gray-900); }
-.app-for-logo { display: block; }
+.app-for-mark { display: inline-block; font-size: 0; line-height: 0; color: var(--gray-900); }
+.app-for-mark:empty { font-size: 12px; font-weight: 700; }
+.app-for-logo { display: inline-block; vertical-align: baseline; }
+
+/* Where a check's standard comes from, so official lines and our own are told apart. */
+.src-tag { margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--gray-500); background: var(--gray-100); white-space: nowrap; }
+.src-tag.src-official { color: #1D4ED8; background: #EFF6FF; }
+.src-tag.src-unseen { color: #92400E; background: #FEF3C7; }
