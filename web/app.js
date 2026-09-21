@@ -31,6 +31,7 @@ function startAnalysis() {
     return;
   }
   const apiKey = readStoredKey();
+  enterApp('platform');
   document.getElementById('loading-url').textContent = url;
   setSteps(PAGE_STEPS);
   showScreen('screen-loading');
@@ -64,6 +65,7 @@ function startVideoAnalysis() {
     openKeyPanel({ nudge: true });
     return;
   }
+  enterApp('youtube');
   document.getElementById('loading-url').textContent = video.url;
   setSteps(VIDEO_STEPS);
   showScreen('screen-loading');
@@ -208,7 +210,7 @@ const tick = (ms = 850) => new Promise(r => setTimeout(r, ms));
 
 async function runAnalysis(url, apiKey) {
   resetLoading();
-  lastAudit = { url, result: null, stage: 'fetch' };
+  lastAudit = { url, result: null, stage: 'fetch', app: 'platform' };
   let stage = 'fetch';
   try {
     progress(0, 2.5);
@@ -300,7 +302,7 @@ function videoPacing() {
 
 async function runVideoAnalysis(url, apiKey) {
   resetLoading();
-  lastAudit = { url, result: null, stage: 'gemini' };
+  lastAudit = { url, result: null, stage: 'gemini', app: 'youtube' };
   try {
     progress(0, 3);
     // oEmbed is YouTube's own public endpoint and needs no key. It is the only part of the page
@@ -344,6 +346,8 @@ async function runVideoAnalysis(url, apiKey) {
 // Re-runs only the Gemini step; the page was already fetched and measured.
 async function resumeGemini() {
   const { url, result } = lastAudit;
+  enterApp('platform');
+  setSteps(PAGE_STEPS);
   document.getElementById('loading-url').textContent = url;
   showScreen('screen-loading');
   resetLoading();
@@ -410,7 +414,7 @@ const WARNING_COPY = {
 };
 const STAGE_LABEL = { fetch: 'Opening the page', read: 'Reading the page', gemini: 'Asking Gemini' };
 const ACTION_LABEL = { retry: 'Try again', edit: 'Change the address', key: 'Change the API key' };
-let lastAudit = { url: '', result: null, stage: '' };
+let lastAudit = { url: '', result: null, stage: '', app: 'platform' };
 
 function copyFor(e) {
   const c = ERROR_COPY[e.code] || ERROR_COPY.UNKNOWN;
@@ -426,6 +430,12 @@ function renderError(url, e, stage) {
     setKeyUi('error', brand(KEY_STATUS_COPY[e.code]));
   }
   const geo = c.geo || e.crawlerImpact;
+  // The failed run's own app, so the error never appears under the previous report's badge, and
+  // the previous report's skeleton never stays on the left of it.
+  enterApp(lastAudit.app || runMode);
+  const rail = document.getElementById('dash-rail');
+  if (rail) { rail.hidden = true; rail.innerHTML = ''; }
+  document.getElementById('dash-split')?.classList.remove('has-rail');
   showScreen('screen-dashboard');
   document.getElementById('dash-content').innerHTML = `
     <section class="err-card" role="alert">
@@ -450,17 +460,19 @@ function renderError(url, e, stage) {
 }
 
 function errorAction(action) {
-  const urlInput = document.getElementById('url-input');
-  urlInput.value = lastAudit.url;
+  const video = lastAudit.app === 'youtube';
+  const input = document.getElementById(video ? 'video-input' : 'url-input');
+  if (input) input.value = lastAudit.url;
   if (action === 'retry') {
-    if (lastAudit.stage === 'gemini' && lastAudit.result) resumeGemini();
+    if (video) startVideoAnalysis();
+    else if (lastAudit.stage === 'gemini' && lastAudit.result) resumeGemini();
     else startAnalysis();
     return;
   }
   if (action === 'key') { openKeyStep(); return; }
+  setMode(lastAudit.app);
   showLanding();
-  urlInput.focus();
-  urlInput.select();
+  if (input) { input.focus(); input.select(); }
 }
 
 // ===== DASHBOARD =====
@@ -528,6 +540,7 @@ function renderCheckGroup(g) {
 }
 
 function renderDashboard(d) {
+  enterApp(APP_OF_KIND[d.kind] || 'platform');
   const video = d.kind === 'youtube';
   const sc = colorOf(d.overallScore);
   const t = d.templates;
@@ -624,10 +637,11 @@ at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
   // The skeleton belongs to a page, not a video: there is no HTML behind a video to draw.
   const rail = document.getElementById('dash-rail');
   if (rail) {
-    rail.hidden = video;
-    rail.innerHTML = video ? '' : SKEL.build(d);
-    document.getElementById('dash-split')?.classList.toggle('has-rail', !video);
-    if (!video) { requestAnimationFrame(() => SKEL.fit()); }
+    const own = d.kind === 'platform';
+    rail.hidden = !own;
+    rail.innerHTML = own ? SKEL.build(d) : '';
+    document.getElementById('dash-split')?.classList.toggle('has-rail', own);
+    if (own) requestAnimationFrame(() => SKEL.fit());
   }
 }
 
@@ -972,7 +986,8 @@ async function checkKey(raw, { silent = false } = {}) {
 
 // From the error screen: fix the key, then pick up where the audit stopped.
 function openKeyStep() {
-  continueAfterKey = lastAudit.stage === 'gemini' && lastAudit.result ? resumeGemini : startAnalysis;
+  continueAfterKey = lastAudit.app === 'youtube' ? startVideoAnalysis
+    : lastAudit.stage === 'gemini' && lastAudit.result ? resumeGemini : startAnalysis;
   openKeyPanel();
 }
 
@@ -1014,6 +1029,21 @@ const TYPE_BRAND = {
 };
 let landingMode = 'platform';
 let modeToken = 0;
+
+// Platform, Social and Video are three products that happen to share a shell. Which one you are
+// in decides the palette, the wordmark beside the name, the steps on the progress screen and
+// what the report is even made of. Every screen after the landing reads it from here, and a run
+// carries the app it started in, so a report can never be shown wearing another app's badge.
+let runMode = 'platform';
+const APP_OF_KIND = { platform: 'platform', youtube: 'youtube' };
+function enterApp(mode) {
+  runMode = mode;
+  document.body.dataset.mode = mode;
+  setAppBrand(mode);
+  const rail = document.getElementById('dash-rail');
+  if (rail && mode !== 'platform') { rail.hidden = true; rail.innerHTML = ''; }
+  if (mode !== 'platform') document.getElementById('dash-split')?.classList.remove('has-rail');
+}
 function setMode(mode) {
   if (!MODES.includes(mode) || mode === landingMode) return;
   const prev = document.querySelector(`.mode-slide[data-mode="${landingMode}"]`);
@@ -1079,8 +1109,8 @@ function setAppBrand(mode) {
     const slot = document.getElementById(id);
     if (!slot) return;
     slot.hidden = !brand;
-    if (!brand) return;
     const mark = slot.querySelector('.app-for-mark');
+    if (!brand) { mark.innerHTML = ''; delete mark.dataset.mode; return; }
     if (mark.dataset.mode === mode) return;
     mark.dataset.mode = mode;
     mark.innerHTML = '';

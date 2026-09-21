@@ -205,9 +205,16 @@ const GEO = (() => {
     let id = 0;
     const push = n => { nodes.push({ id: id++, ...n }); };
 
-    const directText = el => {
+    const BREAKS = n => BLOCK_TAGS.has(n.tagName) || HEADING.test(n.tagName) || MEDIA.has(n.tagName);
+    const ownText = el => {
       let t = '';
-      for (const c of el.childNodes) if (c.nodeType === 3) t += ' ' + c.textContent;
+      (function take(n) {
+        for (const c of n.childNodes) {
+          if (c.nodeType === 3) { t += ' ' + c.textContent; continue; }
+          if (c.nodeType !== 1 || OUTLINE_SKIP.has(c.tagName) || BREAKS(c)) continue;
+          take(c);
+        }
+      })(el);
       return squash(t);
     };
 
@@ -241,10 +248,12 @@ const GEO = (() => {
           continue;
         }
 
-        const own = directText(node);
-        if (own) {
-          const linky = node.querySelectorAll('a').length && own.length < 40;
-          push({ kind: linky ? 'links' : 'text', text: clip(own, 300), chars: own.length, chrome: isChrome });
+        if (BLOCK_TAGS.has(node.tagName)) {
+          const own = ownText(node);
+          if (own) {
+            const linky = node.querySelectorAll('a').length && own.length < 40;
+            push({ kind: linky ? 'links' : 'text', text: clip(own, 300), chars: own.length, chrome: isChrome });
+          }
         }
         if (node.children.length) visit(node, isChrome);
       }
@@ -618,6 +627,7 @@ const GEO = (() => {
     };
 
     const result = {
+      kind: 'platform',
       url: url.href,
       requestedUrl: pageUrl,
       fetchedAt: fetched.fetchedAt || new Date().toISOString(),

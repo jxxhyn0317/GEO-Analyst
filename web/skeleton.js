@@ -61,12 +61,14 @@ const SKEL = (() => {
               <h4 class="sk-sec-t">Structure</h4>
               ${tree.length ? tree.map(sec => `
                 <div class="sk-node lvl${sec.level}">
-                  <div class="sk-head" data-node="${sec.id}">
-                    <span class="sk-tag">H${sec.level}</span>
-                    <span class="sk-htext">${GEO.esc(clipText(sec.text, 52))}</span>
+                  <div class="sk-row">
+                    <div class="sk-head" data-node="${sec.id}">
+                      <span class="sk-tag">${sec.lead ? '\u2014' : `H${sec.level}`}</span>
+                      <span class="sk-htext">${GEO.esc(clipText(sec.text, 48))}</span>
+                    </div>
+                    ${sec.blocks.length ? `<div class="sk-blocks">${blockChips(sec.blocks)}</div>`
+                      : '<div class="sk-blocks"><span class="sk-blk none">nothing under this heading</span></div>'}
                   </div>
-                  ${sec.blocks.length ? `<div class="sk-blocks">${sec.blocks.map(blockChip).join('')}</div>`
-                    : '<div class="sk-blocks"><span class="sk-blk none">nothing under this heading</span></div>'}
                 </div>`).join('')
                 : '<div class="sk-blank">No headings. A model has no way to tell what this page is about.</div>'}
             </section>
@@ -106,22 +108,31 @@ const SKEL = (() => {
         cur.blocks.push(n);
       } else {
         // content before any heading still belongs to the page
-        if (!out.length) out.push({ id: -1, level: 1, text: '(before the first heading)', blocks: [] });
+        if (!out.length) out.push({ id: -1, level: 1, lead: true, text: 'Text before any heading', blocks: [] });
         out[0].blocks.push(n);
       }
     }
     return out;
   }
 
-  function blockChip(n) {
-    const lit = `data-node="${n.id}"`;
-    if (n.kind === 'media') return n.alt
-      ? `<span class="sk-blk has" ${lit}>image, described</span>`
-      : `<span class="sk-blk none" ${lit}>image, no alt</span>`;
-    if (n.kind === 'links') return `<span class="sk-blk none" ${lit}>links only</span>`;
-    if (n.kind === 'table') return `<span class="sk-blk has" ${lit}>table</span>`;
-    if (n.kind === 'list') return `<span class="sk-blk has" ${lit}>list</span>`;
-    return `<span class="sk-blk has" ${lit}>text</span>`;
+  // One chip per kind, not per block. A section with nine paragraphs said "text" nine times,
+  // which reads as noise: what matters is that it has body copy at all, and where it has nothing.
+  const KINDS = [
+    { label: 'text',            has: true,  match: n => n.kind === 'text' },
+    { label: 'list',            has: true,  match: n => n.kind === 'list' },
+    { label: 'table',           has: true,  match: n => n.kind === 'table' },
+    { label: 'image, described',has: true,  match: n => n.kind === 'media' && n.alt },
+    { label: 'image, no alt',   has: false, match: n => n.kind === 'media' && !n.alt },
+    { label: 'links only',      has: false, match: n => n.kind === 'links' }
+  ];
+
+  function blockChips(blocks) {
+    return KINDS.map(k => {
+      const hit = blocks.filter(k.match);
+      if (!hit.length) return '';
+      const ids = hit.map(n => n.id).join(' ');
+      return `<span class="sk-blk ${k.has ? 'has' : 'none'}" data-nodes="${ids}">${k.label}</span>`;
+    }).join('');
   }
 
   let watcher = null;
@@ -192,7 +203,10 @@ const SKEL = (() => {
     const where = locate(groupName, evidenceText);
     const els = [];
     if (where.head) { const h = document.querySelector('[data-anchor="head"]'); if (h) els.push(h); }
-    where.nodes.forEach(id => { const el = document.querySelector(`.wf[data-node="${id}"]`); if (el) els.push(el); });
+    where.nodes.forEach(id => {
+      const el = document.querySelector(`[data-node="${id}"]`) || document.querySelector(`[data-nodes~="${id}"]`);
+      if (el && els.indexOf(el) < 0) els.push(el);
+    });
     if (!els.length) return false;
     els.forEach(el => el.classList.add('is-lit'));
 
