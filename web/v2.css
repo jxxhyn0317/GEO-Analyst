@@ -102,9 +102,11 @@ body { --key-a: #3B82F6; --key-b: #2563EB; --key-c: #1D4ED8; --key-bg: #EFF6FF; 
 body[data-mode="social"] { --key-a: #F58529; --key-b: #DD2A7B; --key-c: #8134AF; --key-bg: #FFF0F4; --name-a: #8134AF; --name-b: #DD2A7B; --name-c: #F58529; }
 body[data-mode="youtube"] { --key-a: #E32227; --key-b: #D8213F; --key-c: #C22159; --key-bg: #FDF1F2; --name-a: #C22159; --name-b: #D8213F; --name-c: #E32227; }
 .landing-container { background: linear-gradient(180deg, var(--white) 0%, var(--key-bg) 100%); }
-#geoaGlyph stop:nth-child(1) { stop-color: var(--key-a); }
-#geoaGlyph stop:nth-child(2) { stop-color: var(--key-b); }
-#geoaGlyph stop:nth-child(3) { stop-color: var(--key-c); }
+/* The mark reads from the same three variables as the wordmark beside it, so the two change by
+   one rule rather than two that drift apart. */
+#geoaGlyph stop:nth-child(1) { stop-color: var(--name-a); }
+#geoaGlyph stop:nth-child(2) { stop-color: var(--name-b); }
+#geoaGlyph stop:nth-child(3) { stop-color: var(--name-c); }
 #screen-landing .product-name { background-image: linear-gradient(135deg, var(--name-a) 0%, var(--name-b) 45%, var(--name-c) 75%, var(--name-b) 100%); }
 /* The bar glow and outline take the active type’s key color. */
 /* No glow on the bar: hover and focus keep the resting shadow. */
@@ -120,15 +122,21 @@ body[data-mode="social"] .title-block, body[data-mode="youtube"] .title-block { 
 /* The title is only a reload link, so it stays still: no gradient sweep, glow or scale on hover. */
 #screen-landing .product-name, #screen-landing .product-name:hover { background-position: 0% 50%; filter: none; }
 a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
-.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; }
+/* The row bottom-aligns. Flex baseline alignment does not do what it looks like it should here,
+   because the box holding the mark has no in-flow content to take a baseline from; measured,
+   flex-end puts the mark's floor exactly on the word's baseline. */
+.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: flex-end; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; }
 .sub-brand.on { opacity: 1; }
 .sub-for { color: var(--gray-900); font-weight: 500; }
 /* Both wordmarks sit in the same box: the outgoing one fades out where it stands while the box
    glides to the new width, so switching types is one movement rather than a swap. */
 /* The box resizes while the old mark is still fading, on that fade's timing, so "for" has
    finished stepping across before the new mark starts: it then rises straight up. */
-.sub-mark { position: relative; display: inline-block; height: 18px; transition: width .11s ease-in; }
-.sub-mark > * { position: absolute; left: 0; top: 0; bottom: 0; margin: auto 0; }
+/* The box is exactly as tall as the mark it holds and the mark sits on its floor, so the box's
+   own bottom edge is what the row lines up on. Its height is set with its width when the mark
+   changes, since the two marks are not the same height. */
+.sub-mark { position: relative; display: inline-block; transition: width .11s ease-in; }
+.sub-mark > * { position: absolute; left: 0; bottom: 0; }
 .sub-logo { display: block; }
 /* Stand-in until the official wordmark file is dropped in. */
 .sub-word { position: static; font-weight: 700; letter-spacing: -0.2px; }

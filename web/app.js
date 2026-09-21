@@ -1079,7 +1079,7 @@ function setSubBrand(mode) {
   mark.appendChild(img);
   // Coming from Platform there is no old width to glide from, so the box takes its size at once
   // and the mark rises straight up instead of drifting in from the right.
-  markWidth(mark, `${Math.round(brand.height * brand.ratio)}px`, !!old);
+  markWidth(mark, `${Math.round(brand.height * brand.ratio)}px`, !!old, `${brand.height}px`);
   fadeMark(old, false);
   fadeMark(img, true);
 }
@@ -1100,9 +1100,10 @@ function fadeWord(el, show, after) {
 
 // Sets the wordmark box's width. It glides only when there are two marks to glide between, and
 // then only for as long as the old mark takes to fade, so the new one arrives at a settled spot.
-function markWidth(mark, width, glide) {
+function markWidth(mark, width, glide, height) {
   if (!glide) mark.style.transition = 'none';
   mark.style.width = width;
+  if (height !== undefined) mark.style.height = height;
   if (!glide) { mark.getBoundingClientRect(); mark.style.transition = ''; }
 }
 
