@@ -232,7 +232,7 @@ ${JSON.stringify(input)}`;
     return 'https://generativelanguage.googleapis.com/v1beta/interactions';
   }
 
-  function bodyFor(prompt, schema, maxTokens, thinking) {
+  function bodyFor(prompt, schema, maxTokens, thinking, video) {
     if (active.provider === 'anthropic') return {
       model: active.model, max_tokens: maxTokens, temperature: 0,
       messages: [{ role: 'user', content: prompt }],
@@ -249,9 +249,11 @@ ${JSON.stringify(input)}`;
       generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: thinking } }
     };
     // Interactions takes standard JSON Schema, so the same converter the other providers use.
+    // A video is passed as its own input part: Google fetches the YouTube URL itself, which is
+    // the only way to reach a video we could never scrape.
     return {
       model: active.model,
-      input: prompt,
+      input: video ? [{ type: 'text', text: prompt }, { type: 'video', uri: video }] : prompt,
       response_format: { type: 'text', mime_type: 'application/json', schema: jsonSchema(schema) }
     };
   }
@@ -284,12 +286,15 @@ ${JSON.stringify(input)}`;
 
   // One model request with a JSON schema: retries once on 429, and maps failures to
   // AuditError codes the app can explain.
-  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note } = {}) {
+  async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note, video } = {}) {
     prime(apiKey);
-    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking));
+    if (video && active.legacy) throw new AuditError('VIDEO_UNSUPPORTED', 'the older API surface has no video input');
+    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking, video));
+    // Watching a video takes far longer than reading a page.
+    const timeout = video ? 300000 : TIMEOUT_MS;
     let resp, repicked = false;
     for (let attempt = 0; attempt < 3; attempt++) {
-      resp = await request(endpoint(apiKey), { method: 'POST', headers: headersFor(apiKey), body });
+      resp = await request(endpoint(apiKey), { method: 'POST', headers: headersFor(apiKey), body, timeout });
       // The model name went away. Ask the key what it can run now and retry once.
       if (resp.status === 404 && active.provider === 'gemini' && !repicked) {
         repicked = true;
@@ -354,6 +359,11 @@ PAGE_DATA:
 ${JSON.stringify(input.page)}`;
   }
 
+  // Hands a public YouTube URL to the model and gets back observations about the video itself.
+  function watchVideo(apiKey, url, schema, prompt, note) {
+    return call(apiKey, prompt, schema, { maxTokens: 8192, thinking: 2048, note, video: url });
+  }
+
   function suggest(apiKey, input, note) {
     return call(apiKey, buildSuggestPrompt(input), SUGGEST_SCHEMA, { maxTokens: 6144, thinking: 1024, note });
   }
@@ -407,7 +417,7 @@ ${JSON.stringify(input.page)}`;
   }
 
   return {
-    judge, suggest, verifyKey, detect, prime, modelLabel,
+    judge, suggest, watchVideo, verifyKey, detect, prime, modelLabel,
     provider: () => active.provider,
     providerName: () => PROVIDERS[active.provider].name,
     providerNameFor: key => PROVIDERS[detect(key)].name,

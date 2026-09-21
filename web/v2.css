@@ -209,6 +209,15 @@ a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
 #screen-loading.active .steps-list .step-item:nth-child(10) { animation-delay: .38s; }
 @keyframes riseIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 
+/* The video field is the same field as the page one, so it gets the same look rather than the
+   browser's default inside the pill. */
+#video-input { flex: 1; min-width: 0; border: 0; outline: none; font: inherit; font-size: 15px; line-height: normal; color: var(--gray-800); padding: 10px 4px; background: transparent; }
+#video-input::placeholder { color: var(--gray-400); }
+/* Out of flow, like the key line, so showing it never moves the bar. It sits below the key line
+   rather than on top of it: both say something the reader needs at the same moment. */
+.bar-msg { position: absolute; top: 100%; left: 0; right: 0; margin: 32px 0 0; font-size: 12.5px; color: var(--red-600); text-align: center; }
+.bar-msg:not([hidden]) { animation: kp-rise .3s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
 /* Coming-soon dialog, keyed to the audit type. */
 .sp-badge { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); color: var(--key-b); }
 .sp-cta { margin: 18px auto 0; padding: 9px 18px; background: linear-gradient(135deg, var(--key-a), var(--key-c)); }

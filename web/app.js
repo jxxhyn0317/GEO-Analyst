@@ -32,8 +32,47 @@ function startAnalysis() {
   }
   const apiKey = readStoredKey();
   document.getElementById('loading-url').textContent = url;
+  setSteps(PAGE_STEPS);
   showScreen('screen-loading');
   runAnalysis(url, apiKey);
+}
+
+// The loading screen lists the job being done, and watching a video is not the same job as
+// reading a page. The list is rewritten before each run so the steps are honest.
+const PAGE_STEPS = ['Reading the page the way AI crawlers do', 'Parsing headings, text and markup',
+  'D1 \u00b7 URL and page context', 'D2 \u00b7 Page structure', 'D3 \u00b7 Answerability and content depth',
+  'D4 \u00b7 Schema markup', 'Reading heading labels and the opening',
+  'Weighing citable facts and first-hand experience', 'Writing the diagnosis and next steps', 'Report ready'];
+const VIDEO_STEPS = ['Handing the video to the model', 'Walking the timeline and reading the transcript',
+  'Listening for the opening and the direct answer', 'Following the spoken structure',
+  'Collecting sentences that stand on their own', 'Collecting numbers, dates and names',
+  'Checking who is speaking and what they cite', 'Scoring against the rubric',
+  'Writing the diagnosis and next steps', 'Report ready'];
+function setSteps(labels) {
+  const list = document.getElementById('steps-list');
+  list.innerHTML = labels.map((t, i) =>
+    `<div class="step-item" data-step="${i}"><span class="step-indicator"></span><span class="step-text">${GEO.esc(t)}</span></div>`).join('');
+}
+
+function startVideoAnalysis() {
+  const input = document.getElementById('video-input');
+  const video = YTGEO.normalize(input.value);
+  if (!video) { setVideoError('That is not a YouTube video address. Paste a link to one video.'); input.focus(); return; }
+  setVideoError('');
+  if (keyState !== 'ok') {
+    continueAfterKey = startVideoAnalysis;
+    openKeyPanel({ nudge: true });
+    return;
+  }
+  document.getElementById('loading-url').textContent = video.url;
+  setSteps(VIDEO_STEPS);
+  showScreen('screen-loading');
+  runVideoAnalysis(video.url, readStoredKey());
+}
+
+function setVideoError(msg) {
+  const el = document.getElementById('video-msg');
+  if (el) { el.textContent = msg; el.hidden = !msg; }
 }
 
 // ===== LOADING SCREEN =====
@@ -231,6 +270,67 @@ async function geminiStage(result, apiKey) {
   setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); requestAnimationFrame(animateResults); }, 500);
 }
 
+// ===== VIDEO RUN =====
+// One long call does the whole job, so the steps advance on a schedule rather than on real
+// events, and the bar keeps moving underneath them. Watching a video takes minutes, not seconds.
+function videoPacing() {
+  const t0 = performance.now();
+  const steps = document.querySelectorAll('.step-item');
+  const timers = [
+    setTimeout(() => progress(1, 30), 2500),
+    setTimeout(() => progress(2, 25), 25000),
+    setTimeout(() => progress(3, 25), 50000),
+    setTimeout(() => progress(4, 25), 75000),
+    setTimeout(() => progress(5, 25), 100000),
+    setTimeout(() => progress(6, 25), 125000),
+    setTimeout(() => { progress(7, 30); note('Scoring against the rubric'); }, 150000),
+    setTimeout(() => note('Still watching. A long video takes longer.', 'yellow'), 90000),
+    setTimeout(() => note('Nearly there. Waiting for the model to finish.', 'yellow'), 200000)
+  ];
+  const ticker = setInterval(() => {
+    aimPct(Math.min(((currentStep + 2) / steps.length) * 100 - 2, 96), 40);
+    const active = steps[currentStep];
+    if (!active) return;
+    let t = active.querySelector('.step-time');
+    if (!t) { t = document.createElement('span'); t.className = 'step-time'; active.appendChild(t); }
+    t.textContent = Math.floor((performance.now() - t0) / 1000) + 's';
+  }, 1000);
+  return () => { timers.forEach(clearTimeout); clearInterval(ticker); };
+}
+
+async function runVideoAnalysis(url, apiKey) {
+  resetLoading();
+  lastAudit = { url, result: null, stage: 'gemini' };
+  try {
+    progress(0, 3);
+    note(`Sending ${url} to the model`);
+    note('The model watches the video itself; nothing is scraped from YouTube', 'blue');
+    const t0 = performance.now();
+    const stop = videoPacing();
+    let obs;
+    try { obs = await JUDGE.watchVideo(apiKey, url, YTGEO.OBS_SCHEMA, YTGEO.prompt(url), note); }
+    finally { stop(); }
+
+    const result = YTGEO.build(obs, url);
+    note(`Watched in ${((performance.now() - t0) / 1000).toFixed(1)}s`, 'green');
+    if (obs.titleSeen) note(obs.titleSeen);
+    note(`${YTGEO.fmt(obs.durationSeconds)} long \u00b7 ${(obs.quotable || []).length} quotable lines \u00b7 ${(obs.citableFacts || []).length} citable facts`);
+    if (!obs.chaptersKnown) note('Chapter markers were not visible, so that group is not scored', 'yellow');
+    progress(8, 1);
+    progress(9);
+    note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
+    finishLoading();
+    currentData = result;
+    lastAudit.result = result;
+    setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); requestAnimationFrame(animateResults); }, 500);
+  } catch (err) {
+    console.error(err);
+    const e = err instanceof AuditError ? err : new AuditError('UNKNOWN', err.message);
+    note(copyFor(e).title, 'red');
+    setTimeout(() => renderError(url, e, 'gemini'), 900);
+  }
+}
+
 // Re-runs only the Gemini step; the page was already fetched and measured.
 async function resumeGemini() {
   const { url, result } = lastAudit;
@@ -289,7 +389,8 @@ const ERROR_COPY = {
   GEMINI_BLOCKED: { title: 'Gemini couldn’t finish this analysis', body: 'It stopped without giving a result. This sometimes happens with certain page content.', tips: ['Try again. If it repeats, try a different page.'], action: 'retry' },
   GEMINI_BAD_OUTPUT: { title: 'Gemini’s answer came back incomplete', body: 'We couldn’t read the result it sent.', tips: ['Try again.'], action: 'retry' },
   MODEL_MISSING: { title: 'That Gemini model is no longer available', body: 'Google retires model names over time. We look up the models your key can run and switch automatically, so this usually clears on a retry.', tips: ['Try again.', 'If it repeats, remove and re-enter your key so we can pick a fresh model.'], action: 'retry' },
-  GEMINI_OTHER: { title: 'Gemini couldn’t process the request', body: 'Google returned an error.', tips: ['Try again in a moment.'], action: 'retry' }
+  GEMINI_OTHER: { title: 'Gemini couldn’t process the request', body: 'Google returned an error.', tips: ['Try again in a moment.'], action: 'retry' },
+  VIDEO_UNSUPPORTED: { title: 'This key can’t watch videos', body: 'Video analysis needs the current Gemini API, and this key connected through the older one.', tips: ['Remove and re-enter your key so it connects again.', 'If it repeats, create a new key in Google AI Studio.'], action: 'key' }
 };
 const WARNING_COPY = {
   TLS_CHAIN_INCOMPLETE: {
@@ -408,6 +509,7 @@ function renderCheckGroup(g) {
 }
 
 function renderDashboard(d) {
+  const video = d.kind === 'youtube';
   const sc = colorOf(d.overallScore);
   const t = d.templates;
   const when = new Date(d.fetchedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
@@ -465,17 +567,20 @@ function renderDashboard(d) {
               <div class="breakdown-header"><span class="breakdown-label">SCORING BREAKDOWN</span></div>
               ${dim.breakdown.map(renderCheckGroup).join('')}
             </div>
-            <div class="ai-box" id="ai-${dim.key}"></div>
+            ${video ? '' : `<div class="ai-box" id="ai-${dim.key}"></div>`}
           </div>`;
       }).join('')}
     </div>
 
     <div class="method-box">
-      <b>How this analysis works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
+      ${video ? `<b>How this analysis works.</b> YouTube serves an automated fetch an empty shell, and a video's transcript is not available for a video you do not own, so nothing here is scraped. The model is given the public YouTube URL and watches the video itself, walking the timeline and reading the transcript as it goes.
+      It reports only observations, each with a quote and a timestamp you can jump to. The rubric on this page turns those observations into points; the model never sets a score.
+      ${d.assessedPoints < d.totalPoints ? `Of ${d.totalPoints} points in the rubric, ${d.assessedPoints} could be looked at in this video. Anything the model could not see is left out of the total rather than counted as a failure.` : ''}
+      Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Because a video is judged by watching rather than by counting markup, these readings are less independently checkable than a page audit; the timestamps are there so you can check them yourself.` : `<b>How this analysis works.</b> The page is fetched once as raw HTML, the view of AI crawlers that do not execute JavaScript. Navigation, header and footer are excluded from content measures.
       Overall = D1×0.15 + D2×0.35 + D3×0.35 + D4×0.15, rounded. Evidence follows one rule: a full-mark group shows one passing example, a partial group shows one passing and one weak example, a zero group shows the weak evidence only.
-      Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.
+      Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.`}
     </div>`;
-  FIXES.init(d);
+  if (!video) FIXES.init(d);
 }
 
 // ===== RESULTS MOTION =====
@@ -1066,6 +1171,13 @@ function closeSoonPanel() {
     openKeyPanel();
   });
   urlInput.addEventListener('focus', () => { if (keyState !== 'ok') openKeyPanel(); });
+
+  const videoInput = document.getElementById('video-input');
+  videoInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) startVideoAnalysis(); });
+  videoInput.addEventListener('input', () => setVideoError(''));
+  videoInput.addEventListener('pointerdown', e => { if (keyState === 'ok') return; e.preventDefault(); openKeyPanel(); });
+  videoInput.addEventListener('focus', () => { if (keyState !== 'ok') openKeyPanel(); });
+
   panelEl().addEventListener('keydown', onDialogKey);
 
   let keyTimer = null;
