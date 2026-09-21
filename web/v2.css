@@ -580,3 +580,8 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .src-tag { margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--gray-500); background: var(--gray-100); white-space: nowrap; }
 .src-tag.src-official { color: #1D4ED8; background: #EFF6FF; }
 .src-tag.src-unseen { color: #92400E; background: #FEF3C7; }
+
+/* What the model actually reported, so a wrong reading can be caught rather than believed. */
+.vid-tech { margin: 24px 0 0; }
+.vid-tech .tech-note { margin: 8px 0 0; font-size: 12px; color: var(--gray-500); }
+.num-unscored { font-size: 20px; font-weight: 600; color: var(--gray-400); letter-spacing: -0.2px; }

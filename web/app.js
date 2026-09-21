@@ -569,7 +569,10 @@ function renderDashboard(d) {
               <span class="weight-chip">weight ${dim.weight}</span>
             </div>
             <h4 class="score-card-title">${dim.title}</h4>
-            <div class="score-card-score"><span class="num score-${dc}">${dim.score}</span><span class="total">/ 100</span><span class="score-card-badge badge-${dc}">${dimLabelFor(dc)}</span></div>
+            ${dim.assessedPoints === 0
+              ? `<div class="score-card-score"><span class="num num-unscored">Not assessed</span></div>
+                 <div class="cap-note">Nothing in this dimension could be looked at, so it is left out of the overall score rather than counted as a failure.</div>`
+              : `<div class="score-card-score"><span class="num score-${dc}">${dim.score}</span><span class="total">/ 100</span><span class="score-card-badge badge-${dc}">${dimLabelFor(dc)}</span></div>`}
             ${dim.capped ? `<div class="cap-note">Checks sum to ${dim.rawScore}; shown as ${dim.score} because no score reaches 100 (headroom above best practice is reserved).</div>` : ''}
             <ul class="diag-list">${pd.diagnosis.map(x => `<li>${GEO.esc(x)}</li>`).join('')}</ul>
             <div class="score-breakdown">
@@ -581,6 +584,20 @@ function renderDashboard(d) {
       }).join('')}
     </div>
 
+    ${video ? `<details class="err-tech vid-tech">
+      <summary>What the model reported</summary>
+      <pre>model            ${GEO.esc(JUDGE.MODEL)}
+duration         ${GEO.esc(YTGEO.fmt(d.observed?.durationSeconds))}  (${GEO.esc(String(d.observed?.durationSeconds))}s)
+metadata seen    ${d.observed?.metadataSeen ? 'yes' : 'no'}
+title read       ${GEO.esc(d.observed?.titleSeen || '(none)')}
+description      ${GEO.esc(String(d.observed?.descriptionWords))} words
+chapters seen    ${d.observed?.chaptersKnown ? `yes, ${(d.observed?.chapterTitles || []).length}` : 'no'}
+quotable lines   ${(d.observed?.quotable || []).length}
+citable facts    ${(d.observed?.citableFacts || []).length}
+first quote      ${GEO.esc(((d.observed?.quotable || [])[0]?.quote || '(none)')).slice(0, 90)}
+at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
+      <p class="tech-note">If the duration is wrong, or a timestamp falls outside the video, the model did not watch it and nothing above can be trusted.</p>
+    </details>` : ''}
     <div class="method-box">
       ${video ? `<b>How this analysis works.</b> YouTube serves an automated fetch an empty shell, and a video's transcript is not available for a video you do not own, so nothing here is scraped. The model is given the public YouTube URL and watches the video itself, walking the timeline and reading the transcript as it goes.
       It reports only observations, each with a quote and a timestamp you can jump to. The rubric on this page turns those observations into points; the model never sets a score.
@@ -608,7 +625,7 @@ function animateResults() {
   const fill = card => {
     if (card.dataset.filled) return;
     card.dataset.filled = '1';
-    const num = card.querySelector('.score-card-score .num');
+    const num = card.querySelector('.score-card-score .num:not(.num-unscored)');
     if (num) countFromZero(num, 900);
     card.querySelectorAll('.group-gauge-fill').forEach((g, i) => {
       g.animate([{ width: '0%' }, { width: g.style.width }], { duration: 760, delay: 80 + i * 70, easing: EASE, fill: 'backwards' });

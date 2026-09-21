@@ -347,7 +347,15 @@ VIDEO: ${url}`;
     r.assessedPoints = seen;
     r.totalPoints = possible;
     r.officialPoints = official;
-    r.overallScore = Math.min(Math.round(r.dimensions.reduce((s, d) => s + d.score * WEIGHTS[d.key], 0)), SCORE_CAP);
+    // A dimension with nothing assessed is not a dimension that scored nothing. It leaves the
+    // average entirely and the remaining weights are shared out, so a video whose metadata could
+    // not be read is not marked down 30 points for something nobody looked at.
+    const live = r.dimensions.filter(d => d.assessedPoints > 0);
+    const weight = live.reduce((s, d) => s + WEIGHTS[d.key], 0);
+    r.overallScore = weight
+      ? Math.min(Math.round(live.reduce((s, d) => s + d.score * WEIGHTS[d.key], 0) / weight), SCORE_CAP)
+      : 0;
+    r.unscoredDimensions = r.dimensions.filter(d => d.assessedPoints === 0).map(d => d.title);
     r.templates = {
       headline: o.headline || '',
       strengths: (o.strengths || []).slice(0, 3),
