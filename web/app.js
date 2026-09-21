@@ -620,6 +620,14 @@ at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
       Heading quality, the opening answer, citable facts and first-hand experience need reading comprehension and are judged by Gemini on the same bands; all other items are counted directly from the HTML. E-E-A-T signals (reviews, author, dates, outside sources) are detected in the HTML; a full review of the expertise itself still needs a person. AI suggested fixes are drafts and never change the score.`}
     </div>`;
   if (!video) FIXES.init(d);
+
+  // The skeleton belongs to a page, not a video: there is no HTML behind a video to draw.
+  const rail = document.getElementById('dash-rail');
+  if (rail) {
+    rail.hidden = video;
+    rail.innerHTML = video ? '' : SKEL.build(d);
+    document.getElementById('dash-split')?.classList.toggle('has-rail', !video);
+  }
 }
 
 // ===== RESULTS MOTION =====
@@ -661,6 +669,20 @@ function animateResults() {
 // Animates <details class="evi"> open and close; a click mid-animation reverses from the current height.
 const EVI_MS = 280;
 const EVI_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+// Opening a piece of evidence points at where it came from, so "the model read this" has a place
+// on the page rather than being a claim on its own.
+document.addEventListener('click', e => {
+  const sum = e.target.closest('details.evi > summary');
+  if (sum && typeof SKEL !== 'undefined') {
+    const det = sum.parentElement;
+    if (det.open) SKEL.clear();
+    else {
+      const group = det.closest('.check-group')?.querySelector('.check-group-name')?.textContent || '';
+      SKEL.light(group, det.querySelector('.evi-body')?.textContent || '');
+    }
+  }
+}, true);
+
 document.addEventListener('click', e => {
   const summary = e.target.closest('details.evi > summary');
   if (!summary) return;

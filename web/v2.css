@@ -585,3 +585,57 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .vid-tech { margin: 24px 0 0; }
 .vid-tech .tech-note { margin: 8px 0 0; font-size: 12px; color: var(--gray-500); }
 .num-unscored { font-size: 20px; font-weight: 600; color: var(--gray-400); letter-spacing: -0.2px; }
+
+/* ===== THE SKELETON RAIL =====
+   The report sits to the right and scrolls. The skeleton stays where it is, because it is the
+   thing being pointed at: evidence opens on the right and lights up a place on the left. */
+.dash-split { display: block; }
+.dash-split.has-rail { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 28px; align-items: start; max-width: none; padding: 0 28px; }
+.dash-split.has-rail .dash-content { max-width: none; margin: 0; padding-left: 0; padding-right: 0; }
+.dash-rail { position: sticky; top: 76px; height: calc(100vh - 100px); min-width: 0; }
+.dash-rail[hidden] { display: none; }
+
+.skel { display: flex; flex-direction: column; height: 100%; background: var(--white); border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; }
+.skel-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--gray-100); }
+.skel-title { font-size: 13px; font-weight: 700; color: var(--gray-800); letter-spacing: -0.1px; }
+.skel-sub { margin: 4px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--gray-500); }
+.skel-scroll { flex: 1; overflow-y: auto; padding: 14px; scroll-behavior: smooth; }
+.skel-scroll::-webkit-scrollbar { width: 6px; }
+.skel-scroll::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
+
+.skel-zone { margin-bottom: 18px; }
+.skel-zone-label { margin-bottom: 8px; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--gray-400); }
+.skel-zone-head { padding: 10px; border: 1px dashed var(--gray-300); border-radius: 8px; background: var(--gray-50); transition: background-color .2s ease, border-color .2s ease; }
+.skel-zone-head.is-lit { border-color: var(--key-b); border-style: solid; background: color-mix(in srgb, var(--key-b) 8%, #FFFFFF); }
+.skel-zone-chrome { opacity: .5; }
+
+.skel-meta { display: flex; gap: 8px; padding: 3px 4px; border-radius: 4px; font-size: 11px; line-height: 1.5; }
+.skel-meta-key { flex: none; width: 96px; color: var(--gray-500); }
+.skel-meta-val { min-width: 0; color: var(--gray-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skel-meta.is-missing .skel-meta-val { color: var(--red-500); }
+
+.skel-row { position: relative; margin-bottom: 4px; padding: 4px 8px; border-radius: 5px; overflow: hidden; transition: background-color .2s ease, box-shadow .2s ease; }
+.skel-text { display: block; font-size: 10.5px; line-height: 1.45; color: var(--gray-500); overflow: hidden; }
+.skel-block { background: var(--gray-100); }
+.skel-h { background: none; padding-left: 0; display: flex; gap: 6px; align-items: baseline; }
+.skel-lvl { flex: none; font-size: 9px; font-weight: 700; color: var(--gray-400); }
+.skel-h .skel-text { font-weight: 600; color: var(--gray-800); }
+.skel-h1 .skel-text { font-size: 13px; }
+.skel-h2 .skel-text { font-size: 12px; }
+.skel-list { background: var(--gray-100); }
+.skel-table { background: var(--gray-100); }
+
+/* A hole is where a reader sees something and the model sees nothing. */
+.skel-hole { background: repeating-linear-gradient(135deg, var(--gray-50), var(--gray-50) 6px, var(--gray-100) 6px, var(--gray-100) 12px); border: 1px dashed var(--gray-200); display: flex; align-items: center; }
+.skel-hole-label { font-size: 10px; color: var(--gray-400); }
+.skel-empty { padding: 14px; border: 1px dashed var(--red-200); border-radius: 8px; font-size: 11.5px; color: var(--red-600); background: var(--red-50); }
+.skel-more { padding: 4px 8px; font-size: 10px; color: var(--gray-400); }
+
+.skel-row.is-lit { background: color-mix(in srgb, var(--key-b) 14%, #FFFFFF); box-shadow: inset 0 0 0 1.5px var(--key-b); }
+.skel-row.is-lit .skel-text, .skel-row.is-lit .skel-hole-label { color: var(--gray-900); }
+
+@media (max-width: 1100px) {
+  .dash-split.has-rail { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .dash-rail { position: static; height: auto; max-height: 420px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
+}
+@media (prefers-reduced-motion: reduce) { .skel-scroll { scroll-behavior: auto; } }

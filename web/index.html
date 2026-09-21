@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=90">
+  <link rel="stylesheet" href="v2.css?v=91">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -222,15 +222,19 @@
           <button class="btn-outline" id="export-pdf-btn" onclick="exportPdf(this)">Export PDF</button>
         </div>
       </nav>
-      <div class="dash-content" id="dash-content"></div>
+      <div class="dash-split" id="dash-split">
+        <aside class="dash-rail" id="dash-rail" hidden></aside>
+        <div class="dash-content" id="dash-content"></div>
+      </div>
     </div>
   </div>
 
-  <script src="engine.js?v=3"></script>
+  <script src="engine.js?v=4"></script>
   <script src="judge.js?v=11"></script>
   <script src="fixes.js?v=8"></script>
   <script src="pdf.js?v=3"></script>
   <script src="youtube.js?v=4"></script>
-  <script src="app.js?v=67"></script>
+  <script src="skeleton.js?v=2"></script>
+  <script src="app.js?v=68"></script>
 </body>
 </html>

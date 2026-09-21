@@ -70,6 +70,16 @@ const GEO = (() => {
   }
 
   // ---------- DOM walk ----------
+  // Navigation, headers, footers and the usual furniture. Both passes use this one test so the
+  // skeleton marks exactly what the scoring ignored.
+  function isChromeSelf(n) {
+    if (CHROME_TAGS.has(n.tagName)) return true;
+    if ((n.tagName === 'HEADER' || n.tagName === 'FOOTER') && !n.closest('main, article, [role="main"]')) return true;
+    const role = n.getAttribute('role');
+    if (role && CHROME_ROLES.test(role)) return true;
+    return CHROME_CLASS.test((n.getAttribute('class') || '') + ' ' + (n.id || ''));
+  }
+
   function walk(doc) {
     const root = doc.body || doc.documentElement;
     const headings = [];
@@ -102,13 +112,6 @@ const GEO = (() => {
         return;
       }
       for (const c of node.childNodes) visit(c, inHeading, nowChrome);
-    }
-    function isChromeSelf(n) {
-      if (CHROME_TAGS.has(n.tagName)) return true;
-      if ((n.tagName === 'HEADER' || n.tagName === 'FOOTER') && !n.closest('main, article, [role="main"]')) return true;
-      const role = n.getAttribute('role');
-      if (role && CHROME_ROLES.test(role)) return true;
-      return CHROME_CLASS.test((n.getAttribute('class') || '') + ' ' + (n.id || ''));
     }
     visit(root, null, false);
     const blockList = [...blocks.values()].map(b => ({ ...b, text: squash(b.text) })).filter(b => b.text).sort((a, b) => a.pos - b.pos);
@@ -187,6 +190,80 @@ const GEO = (() => {
   const ok = s => `<span class="ok">${s}</span>`;
   const hl = s => `<span class="hl">${s}</span>`;
   const quote = s => `"${esc(clip(s, 160))}"`;
+
+  // ---------- what the page looks like to a reader that only gets the HTML ----------
+  // A second pass, deliberately separate from the scoring walk so it cannot disturb it. It keeps
+  // document order and records what each region actually offers an answer engine: text it can
+  // quote, or nothing at all. An image without alt text is a hole. A block of links is a hole.
+  // The head is the inverse: invisible to a person, and the richest thing on the page to a model.
+  const OUTLINE_SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG', 'CANVAS', 'SELECT', 'OPTION']);
+  const MEDIA = new Set(['IMG', 'PICTURE', 'VIDEO', 'AUDIO', 'IFRAME', 'OBJECT', 'EMBED', 'FIGURE']);
+
+  function outlineOf(doc, chromeTest) {
+    const root = doc.body || doc.documentElement;
+    const nodes = [];
+    let id = 0;
+    const push = n => { nodes.push({ id: id++, ...n }); };
+
+    const directText = el => {
+      let t = '';
+      for (const c of el.childNodes) if (c.nodeType === 3) t += ' ' + c.textContent;
+      return squash(t);
+    };
+
+    function visit(el, chrome) {
+      for (const node of el.children) {
+        if (OUTLINE_SKIP.has(node.tagName) || node.hasAttribute('hidden')) continue;
+        const isChrome = chrome || chromeTest(node);
+
+        if (HEADING.test(node.tagName)) {
+          const text = squash(node.textContent);
+          if (text) push({ kind: 'heading', level: +node.tagName[1], text: clip(text, 160), chars: text.length, chrome: isChrome });
+          continue;
+        }
+        if (MEDIA.has(node.tagName)) {
+          const img = node.tagName === 'IMG' ? node : node.querySelector('img');
+          const alt = squash(img?.getAttribute('alt') || '');
+          const cap = squash(node.querySelector?.('figcaption')?.textContent || '');
+          push({ kind: 'media', tag: node.tagName.toLowerCase(), text: clip(alt || cap, 160), alt: !!alt, caption: !!cap, chars: (alt || cap).length, chrome: isChrome });
+          continue;
+        }
+        if (node.tagName === 'TABLE') {
+          const text = squash(node.textContent);
+          push({ kind: 'table', text: clip(text, 160), chars: text.length, rows: node.querySelectorAll('tr').length, chrome: isChrome });
+          continue;
+        }
+        if (node.tagName === 'UL' || node.tagName === 'OL') {
+          const items = [...node.querySelectorAll(':scope > li')].map(li => squash(li.textContent)).filter(Boolean);
+          const text = items.join(' · ');
+          const linksOnly = items.length > 0 && items.every(t => t.length < 40);
+          push({ kind: linksOnly ? 'links' : 'list', text: clip(text, 200), chars: text.length, items: items.length, chrome: isChrome });
+          continue;
+        }
+
+        const own = directText(node);
+        if (own) {
+          const linky = node.querySelectorAll('a').length && own.length < 40;
+          push({ kind: linky ? 'links' : 'text', text: clip(own, 300), chars: own.length, chrome: isChrome });
+        }
+        if (node.children.length) visit(node, isChrome);
+      }
+    }
+    visit(root, false);
+    return nodes;
+  }
+
+  // What lives in the head: nothing a reader sees, everything a model reads first.
+  function headOutline(doc, title, metaDesc, canonicalHref, schemaTypes) {
+    const og = [...doc.querySelectorAll('meta[property^="og:" i]')].length;
+    return [
+      { key: 'title', label: 'title', text: title, present: !!title },
+      { key: 'description', label: 'meta description', text: metaDesc, present: !!metaDesc },
+      { key: 'canonical', label: 'canonical', text: canonicalHref, present: !!canonicalHref },
+      { key: 'og', label: 'open graph', text: og ? `${og} tags` : '', present: og > 0 },
+      { key: 'schema', label: 'structured data', text: (schemaTypes || []).join(', '), present: (schemaTypes || []).length > 0 }
+    ];
+  }
 
   // ---------- analysis ----------
   function analyze(html, pageUrl, fetched = {}) {
@@ -534,7 +611,10 @@ const GEO = (() => {
       schemaTypes: typeList.slice(0, 16),
       qaPairs: pairs.slice(0, 8).map(p => ({ q: clip(p.q, 200), a: clip(p.a, 400) })),
       weakHeadings: informative.filter(x => !x.ok).map(x => x.h.text).slice(0, 8),
-      weakSentences: qualifiers.slice(0, 6).map(s => clip(s, 240))
+      weakSentences: qualifiers.slice(0, 6).map(s => clip(s, 240)),
+      // The page as an answer engine receives it, in document order.
+      outline: outlineOf(doc, isChromeSelf),
+      head: headOutline(doc, title, metaDesc, canonicalHref, typeList)
     };
 
     const result = {
