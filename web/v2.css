@@ -587,12 +587,12 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .num-unscored { font-size: 20px; font-weight: 600; color: var(--gray-400); letter-spacing: -0.2px; }
 
 /* ===== THE PAGE AS A MODEL RECEIVES IT =====
-   The drawing says one thing: what the model has and what it does not. Solid ink is content it
-   holds; a red hollow box is a place where a reader sees something and the model receives
-   nothing. Length and quality are deliberately absent, because the score already carries those
-   and mixing them in is what made this unreadable the first time. */
+   Three questions in the order someone asks them. What came out of the head. How does the page
+   split from the top heading down. Are the things the rubric looks for actually there. Found is
+   the green this app already uses for a passing check and not found is its red, so the drawing
+   and the score speak one language. */
 .dash-split { display: block; }
-.dash-split.has-rail { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 36px; align-items: start; max-width: none; padding: 0 36px; }
+.dash-split.has-rail { display: grid; grid-template-columns: 460px minmax(0, 1fr); gap: 36px; align-items: start; max-width: none; padding: 0 36px; }
 .dash-split.has-rail .dash-content { max-width: none; margin: 0; padding-left: 0; padding-right: 0; }
 .dash-rail { position: sticky; top: 76px; height: calc(100vh - 104px); min-width: 0; }
 .dash-rail[hidden] { display: none; }
@@ -602,68 +602,60 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .skel-title { font-size: 13.5px; font-weight: 700; color: var(--gray-800); letter-spacing: -0.1px; }
 .skel-key { display: flex; gap: 16px; margin-top: 9px; }
 .skel-key-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--gray-500); }
-.kb { width: 18px; height: 9px; border-radius: 2px; flex: none; }
-.kb-has { background: var(--gray-600); }
-.kb-none { border: 1.5px dashed var(--red-300); background: var(--red-50); }
+.kb { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+.kb-has { background: var(--green-50); border: 1px solid var(--green-100); }
+.kb-none { background: var(--red-50); border: 1px solid var(--red-100); }
 
-/* The stage holds one page and scales it to fit, so nothing here ever needs scrolling. */
-.skel-stage { flex: 1; min-height: 0; padding: 18px 22px; background: var(--gray-50); overflow: hidden; }
+.skel-stage { flex: 1; min-height: 0; padding: 16px 20px; background: var(--gray-50); overflow: hidden; }
 .skel-fit { transform-origin: top left; }
 
-.skel-hidden { padding: 11px 13px; border: 1.5px dashed var(--blue-300); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--blue-50); transition: box-shadow .2s ease; }
-.skel-hidden-tab { margin-bottom: 8px; font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--blue-600); }
-.skel-meta-grid { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.skel-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
-.skel-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.skel-meta.has .skel-dot { background: var(--gray-600); }
-.skel-meta.has .skel-meta-key { color: var(--gray-700); }
-.skel-meta.none .skel-dot { border: 1.5px dashed var(--red-400); background: var(--white); }
-.skel-meta.none .skel-meta-key { color: var(--red-500); text-decoration: line-through; text-decoration-color: var(--red-200); }
-.skel-hidden.is-lit { box-shadow: inset 0 0 0 2px var(--key-b); }
+.sk-sec { margin-bottom: 14px; padding: 12px 14px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; }
+.sk-sec:last-child { margin-bottom: 0; }
+.sk-sec-t { margin: 0 0 10px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--gray-400); }
+.sk-host { margin-left: 8px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--gray-400); }
+.sk-sec.is-lit { box-shadow: 0 0 0 2px var(--key-b); }
 
-.skel-page { border: 1.5px solid var(--gray-300); border-radius: 0 0 10px 10px; overflow: hidden; background: var(--white); }
-.skel-bar { display: flex; align-items: center; gap: 5px; padding: 8px 12px; background: var(--gray-100); border-bottom: 1px solid var(--gray-200); }
-.skel-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-300); flex: none; }
-.skel-bar span { margin-left: 8px; font-size: 10px; color: var(--gray-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skel-paper { padding: 16px 18px 20px; }
+.sk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 500; max-width: 100%; }
+.sk-chip b { flex: none; font-size: 10px; }
+.sk-chip em { font-style: normal; opacity: .6; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-chip.has { color: var(--green-600); background: var(--green-50); border: 1px solid var(--green-100); }
+.sk-chip.none { color: var(--red-600); background: var(--red-50); border: 1px solid var(--red-100); }
 
-/* Every block is the same size. The drawing is about presence, not volume. */
-.wf { margin-bottom: 12px; padding: 3px; border-radius: 5px; transition: box-shadow .2s ease, background-color .2s ease; }
-.wf b { display: block; height: 6px; margin-bottom: 5px; border-radius: 3px; background: var(--gray-300); }
-.wf b.short { width: 58%; margin-bottom: 0; }
-.wf-cap { display: block; margin-top: 4px; font-size: 10px; line-height: 1.4; color: var(--gray-500); }
-.wf-cap.none { color: var(--red-500); }
+.sk-node { margin-bottom: 8px; }
+.sk-node.lvl2 { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--gray-200); }
+.sk-node.lvl3 { margin-left: 30px; padding-left: 12px; border-left: 2px solid var(--gray-100); }
+.sk-node.lvl4 { margin-left: 44px; padding-left: 12px; border-left: 2px solid var(--gray-100); }
+.sk-head { display: flex; align-items: baseline; gap: 7px; padding: 3px 5px; border-radius: 5px; transition: background-color .2s ease, box-shadow .2s ease; }
+.sk-tag { flex: none; font-size: 9px; font-weight: 700; color: var(--gray-400); }
+.sk-htext { font-size: 13px; font-weight: 700; color: var(--gray-900); line-height: 1.35; letter-spacing: -0.1px; }
+.sk-node.lvl2 .sk-htext { font-size: 12px; font-weight: 600; }
+.sk-node.lvl3 .sk-htext, .sk-node.lvl4 .sk-htext { font-size: 11.5px; font-weight: 600; color: var(--gray-700); }
 
-.wf-h { margin: 18px 0 10px; }
-.wf-h b { background: var(--gray-800); margin-bottom: 0; }
-.wf-h1 b { height: 13px; width: 78%; }
-.wf-h2 b { height: 10px; width: 56%; }
-.wf-h3 b { height: 8px; width: 42%; }
-.wf-h .wf-cap { color: var(--gray-700); font-weight: 600; font-size: 10.5px; }
+.sk-blocks { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0 22px; }
+.sk-blk { padding: 2px 7px; border-radius: 4px; font-size: 10px; transition: box-shadow .2s ease, background-color .2s ease; }
+.sk-blk.has { color: var(--green-600); background: var(--green-50); }
+.sk-blk.none { color: var(--red-600); background: var(--red-50); border: 1px dashed var(--red-200); }
 
-.wf-img.has .wf-box { height: 44px; border-radius: 5px; background: var(--gray-200); }
-.wf-img.none .wf-box { height: 44px; display: flex; align-items: center; justify-content: center; border: 1.5px dashed var(--red-300); border-radius: 5px; background: var(--red-50); }
-.wf-img.none .wf-box span { font-size: 10px; font-weight: 600; color: var(--red-400); }
+.sk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sk-card { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 7px; font-size: 11px; font-weight: 500; min-width: 0; }
+.sk-card b { flex: none; font-size: 10px; }
+.sk-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-card em { font-style: normal; font-size: 9.5px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-card.has { color: var(--green-600); background: var(--green-50); border: 1px solid var(--green-100); }
+.sk-card.none { color: var(--red-600); background: var(--red-50); border: 1px dashed var(--red-200); }
 
-.wf-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.wf-links i { width: 46px; height: 14px; border: 1.5px dashed var(--red-300); border-radius: 7px; background: var(--red-50); flex: none; }
-.wf-links .wf-cap { width: 100%; margin-top: 3px; }
-
-.wf-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.wf-table i { height: 13px; border-radius: 3px; background: var(--gray-200); }
-
-.skel-blank { padding: 30px 16px; text-align: center; font-size: 12px; line-height: 1.7; color: var(--red-500); border: 1.5px dashed var(--red-300); border-radius: 8px; background: var(--red-50); }
+.sk-blank { padding: 18px 14px; text-align: center; font-size: 11.5px; line-height: 1.6; color: var(--red-600); border: 1px dashed var(--red-200); border-radius: 8px; background: var(--red-50); }
 
 .skel-foot-note { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 22px 14px; border-top: 1px solid var(--gray-100); }
 .fn { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
-.fn.has { color: var(--gray-600); background: var(--gray-100); }
+.fn.has { color: var(--green-600); background: var(--green-50); }
 .fn.none { color: var(--red-600); background: var(--red-50); }
 
-.wf.is-lit { background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); box-shadow: 0 0 0 2px var(--key-b); }
-.wf.is-lit b { background: var(--key-c); }
-.wf.is-lit .wf-cap { color: var(--gray-900); }
+.sk-head.is-lit, .sk-blk.is-lit { box-shadow: 0 0 0 2px var(--key-b); background: color-mix(in srgb, var(--key-b) 12%, #FFFFFF); }
+.sk-head.is-lit .sk-htext, .sk-head.is-lit .sk-tag { color: var(--key-c); }
 
 @media (max-width: 1180px) {
   .dash-split.has-rail { grid-template-columns: minmax(0, 1fr); padding: 0; }
-  .dash-rail { position: static; height: 520px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
+  .dash-rail { position: static; height: 560px; margin: 0 auto 24px; width: 100%; max-width: 900px; }
 }

@@ -11,74 +11,119 @@ const SKEL = (() => {
   function build(d) {
     const m = d.measure || {};
     nodes = m.outline || [];
-    const head = m.head || [];
-    const body = nodes.filter(n => !n.chrome);
-    const missing = head.filter(h => !h.present).length;
-    const holes = body.filter(n => HOLE.has(n.kind)).length;
+    const ee = d.eeat || {};
+    const ms = m.missingSchema || {};
     const host = (() => { try { return new URL(d.url).host; } catch { return ''; } })();
+
+    // ---- 1. what was pulled out of the head ----
+    const meta = (m.head || []).map(h => ({ label: h.label, value: h.text, has: h.present }));
+
+    // ---- 2. the page split from the top heading down ----
+    const tree = sectionsOf(nodes.filter(n => !n.chrome));
+
+    // ---- 3. the named things the rubric looks for ----
+    const wanted = [
+      { label: 'FAQ block', has: (m.qaPairs || []).length > 0 || !ms.faq },
+      { label: 'Review or rating', has: !!ee.reviews },
+      { label: 'Named author', has: !!ee.author, value: ee.author },
+      { label: 'Date', has: !!ee.date, value: ee.date },
+      { label: 'Outside sources', has: !!ee.sources },
+      { label: 'Organization schema', has: !ms.organization },
+      { label: 'Page entity schema', has: !ms.pageEntity },
+      { label: 'Breadcrumb', has: !ms.breadcrumb }
+    ];
+
+    const missingMeta = meta.filter(x => !x.has).length;
+    const missingWanted = wanted.filter(x => !x.has).length;
 
     return `
       <div class="skel">
         <div class="skel-head">
           <div class="skel-title">The page, as a model receives it</div>
           <div class="skel-key">
-            <span class="skel-key-item"><i class="kb kb-has"></i>the model has this</span>
-            <span class="skel-key-item"><i class="kb kb-none"></i>nothing here for it</span>
+            <span class="skel-key-item"><i class="kb kb-has"></i>found</span>
+            <span class="skel-key-item"><i class="kb kb-none"></i>not found</span>
           </div>
         </div>
+
         <div class="skel-stage" id="skel-stage">
           <div class="skel-fit" id="skel-fit">
-            <div class="skel-hidden" data-anchor="head">
-              <div class="skel-hidden-tab">before the page · a reader never sees this</div>
-              <div class="skel-meta-grid">
-                ${head.map(h => `
-                  <div class="skel-meta ${h.present ? 'has' : 'none'}">
-                    <span class="skel-dot"></span>
-                    <span class="skel-meta-key">${GEO.esc(h.label)}</span>
-                  </div>`).join('')}
-              </div>
-            </div>
 
-            <div class="skel-page">
-              <div class="skel-bar"><i></i><i></i><i></i><span>${GEO.esc(host)}</span></div>
-              <div class="skel-paper">
-                ${body.length ? body.map(row).join('') : '<div class="skel-blank">A reader sees a page here.<br>A model receives nothing.</div>'}
+            <section class="sk-sec" data-anchor="head">
+              <h4 class="sk-sec-t">Metadata <span class="sk-host">${GEO.esc(host)}</span></h4>
+              <div class="sk-chips">
+                ${meta.map(x => `<span class="sk-chip ${x.has ? 'has' : 'none'}">
+                  <b>${x.has ? '\u2713' : '\u2715'}</b>${GEO.esc(x.label)}${x.has && x.value ? `<em>${GEO.esc(clipText(x.value, 30))}</em>` : ''}</span>`).join('')}
               </div>
-            </div>
+            </section>
+
+            <section class="sk-sec">
+              <h4 class="sk-sec-t">Structure</h4>
+              ${tree.length ? tree.map(sec => `
+                <div class="sk-node lvl${sec.level}">
+                  <div class="sk-head" data-node="${sec.id}">
+                    <span class="sk-tag">H${sec.level}</span>
+                    <span class="sk-htext">${GEO.esc(clipText(sec.text, 52))}</span>
+                  </div>
+                  ${sec.blocks.length ? `<div class="sk-blocks">${sec.blocks.map(blockChip).join('')}</div>`
+                    : '<div class="sk-blocks"><span class="sk-blk none">nothing under this heading</span></div>'}
+                </div>`).join('')
+                : '<div class="sk-blank">No headings. A model has no way to tell what this page is about.</div>'}
+            </section>
+
+            <section class="sk-sec">
+              <h4 class="sk-sec-t">Structured information</h4>
+              <div class="sk-grid">
+                ${wanted.map(x => `<div class="sk-card ${x.has ? 'has' : 'none'}">
+                  <b>${x.has ? '\u2713' : '\u2715'}</b>
+                  <span>${GEO.esc(x.label)}</span>
+                  ${x.has && x.value ? `<em>${GEO.esc(clipText(x.value, 26))}</em>` : ''}
+                </div>`).join('')}
+              </div>
+            </section>
+
           </div>
         </div>
+
         <div class="skel-foot-note">
-          ${missing ? `<span class="fn none">${missing} missing in the head</span>` : '<span class="fn has">head complete</span>'}
-          ${holes ? `<span class="fn none">${holes} ${holes === 1 ? 'place' : 'places'} it cannot read</span>` : ''}
+          <span class="fn ${missingMeta ? 'none' : 'has'}">${missingMeta ? `${missingMeta} metadata missing` : 'metadata complete'}</span>
+          <span class="fn ${missingWanted ? 'none' : 'has'}">${missingWanted ? `${missingWanted} of ${wanted.length} not found` : 'all found'}</span>
         </div>
       </div>`;
   }
 
-  // Presence is the only thing the drawing says. Solid means the model has it, hollow and red
-  // means a reader sees something there and the model receives nothing. Nothing here encodes how
-  // long a block is or how good it is: the score already says that, and mixing the two is what
-  // made the first version unreadable.
-  function row(n) {
-    const lit = `data-node="${n.id}"`;
-    if (n.kind === 'heading') {
-      return `<div class="wf wf-h wf-h${Math.min(n.level, 3)}" ${lit}><b></b><span class="wf-cap">${GEO.esc(clipText(n.text, 40))}</span></div>`;
+  // Document order already carries the shape: a heading opens a section and everything until the
+  // next heading belongs to it. Nesting it by level is what shows the page splitting from the top
+  // heading downwards, which is the thing a reader of this drawing is trying to see.
+  function sectionsOf(body) {
+    const out = [];
+    let cur = null;
+    for (const n of body) {
+      if (n.kind === 'heading') {
+        cur = { id: n.id, level: Math.min(n.level, 4), text: n.text, blocks: [] };
+        out.push(cur);
+      } else if (cur) {
+        cur.blocks.push(n);
+      } else {
+        // content before any heading still belongs to the page
+        if (!out.length) out.push({ id: -1, level: 1, text: '(before the first heading)', blocks: [] });
+        out[0].blocks.push(n);
+      }
     }
-    if (n.kind === 'media') {
-      return n.alt
-        ? `<div class="wf wf-img has" ${lit}><div class="wf-box"></div><span class="wf-cap">image, described in alt text</span></div>`
-        : `<div class="wf wf-img none" ${lit}><div class="wf-box"><span>nothing here</span></div><span class="wf-cap none">image with no alt text</span></div>`;
-    }
-    if (n.kind === 'links') {
-      return `<div class="wf wf-links none" ${lit}><i></i><i></i><i></i><span class="wf-cap none">links only</span></div>`;
-    }
-    if (n.kind === 'table') {
-      return `<div class="wf wf-table has" ${lit}><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
-    }
-    return `<div class="wf wf-text has" ${lit}><b></b><b></b><b class="short"></b></div>`;
+    return out;
   }
 
-  // The whole page has to be visible at once, so whatever it comes to is scaled down to the room
-  // available rather than asking anyone to scroll a diagram.
+  function blockChip(n) {
+    const lit = `data-node="${n.id}"`;
+    if (n.kind === 'media') return n.alt
+      ? `<span class="sk-blk has" ${lit}>image, described</span>`
+      : `<span class="sk-blk none" ${lit}>image, no alt</span>`;
+    if (n.kind === 'links') return `<span class="sk-blk none" ${lit}>links only</span>`;
+    if (n.kind === 'table') return `<span class="sk-blk has" ${lit}>table</span>`;
+    if (n.kind === 'list') return `<span class="sk-blk has" ${lit}>list</span>`;
+    return `<span class="sk-blk has" ${lit}>text</span>`;
+  }
+
   let watcher = null;
   function fit() {
     const stage = document.getElementById('skel-stage');
@@ -146,7 +191,7 @@ const SKEL = (() => {
     clear();
     const where = locate(groupName, evidenceText);
     const els = [];
-    if (where.head) { const h = document.querySelector('.skel-hidden'); if (h) els.push(h); }
+    if (where.head) { const h = document.querySelector('[data-anchor="head"]'); if (h) els.push(h); }
     where.nodes.forEach(id => { const el = document.querySelector(`.wf[data-node="${id}"]`); if (el) els.push(el); });
     if (!els.length) return false;
     els.forEach(el => el.classList.add('is-lit'));
