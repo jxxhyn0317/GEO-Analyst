@@ -51,7 +51,7 @@ const JUDGE = (() => {
   }
   const verOf = n => parseFloat((n.match(/gemini-([\d.]+)/) || [])[1] || 0);
   async function geminiModels(key) {
-    const resp = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(key.trim())}`, { timeout: 10000 });
+    const resp = await request(GEM_MODELS(key), { timeout: 10000 });
     if (!resp.ok) throw failure(await errorOf(resp));
     let models = [];
     try { models = (await resp.json()).models || []; } catch {}
@@ -222,12 +222,25 @@ ${JSON.stringify(input)}`;
     if (active.legacy) return { 'Content-Type': 'application/json' };
     // The docs also send Api-Revision, but a browser cannot: it is not allowed through the
     // preflight and every call fails before it leaves. The endpoint takes requests without it.
+    // The proxy adds the credential; sending an empty one here would only invite a 400.
+    if (server) return { 'Content-Type': 'application/json' };
     return { 'Content-Type': 'application/json', 'x-goog-api-key': k };
   };
+
+  // When the deployment holds the key, every Gemini call goes through our own function instead of
+  // straight to Google, so the key never reaches the browser. Nothing else about the request
+  // changes: the proxy relays the body and the reply untouched.
+  let server = false;
+  const useServer = v => { server = !!v; };
+  const serverMode = () => server;
+  const GEM_MODELS = key => server
+    ? '/api/gemini?models=1'
+    : `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(String(key || '').trim())}`;
 
   function endpoint(key) {
     if (active.provider === 'anthropic') return 'https://api.anthropic.com/v1/messages';
     if (active.provider === 'openai') return 'https://api.openai.com/v1/chat/completions';
+    if (server) return active.legacy ? `/api/gemini?legacy=${encodeURIComponent(active.model)}` : '/api/gemini';
     if (active.legacy) return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
     return 'https://generativelanguage.googleapis.com/v1beta/interactions';
   }
@@ -386,7 +399,7 @@ ${JSON.stringify(input.page)}`;
     if (active.provider === 'gemini') {
       let listed;
       try {
-        listed = await request(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(key)}`, { timeout: 10000 });
+        listed = await request(GEM_MODELS(key), { timeout: 10000 });
       } catch (e) { return { ok: false, code: e.code }; }
       if (!listed.ok && listed.status === 400) return { ok: false, code: 'KEY_INVALID' };
       let ids = [];
@@ -423,7 +436,7 @@ ${JSON.stringify(input.page)}`;
   }
 
   return {
-    judge, suggest, watchVideo, verifyKey, detect, prime, modelLabel,
+    judge, suggest, watchVideo, verifyKey, detect, prime, modelLabel, useServer, serverMode,
     provider: () => active.provider,
     providerName: () => PROVIDERS[active.provider].name,
     providerNameFor: key => PROVIDERS[detect(key)].name,

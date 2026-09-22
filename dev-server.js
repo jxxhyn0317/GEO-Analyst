@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, 'web');
 const fetchHandler = require('./web/api/fetch.js');
+const geminiHandler = require('./web/api/gemini.js');
 const PORT = Number(process.env.PORT) || 3847;
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -16,6 +17,7 @@ const TYPES = {
 http.createServer((req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`);
   if (u.pathname === '/api/fetch') return fetchHandler(req, res);
+  if (u.pathname === '/api/gemini') return geminiHandler(req, res);
 
   const file = path.join(ROOT, path.normalize(decodeURIComponent(u.pathname)));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }

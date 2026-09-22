@@ -44,7 +44,7 @@ const FAIL = {
   HTTP_OTHER: { status: 200, title: 'The site answered with an unexpected status', hint: 'Open the page in a browser to check that it loads.' },
   NOT_HTML: { status: 200, title: 'This URL is not a web page', hint: 'It returns a file instead of HTML. Analyze the page that links to it.' },
   EMPTY: { status: 200, title: 'The page returned no content', hint: 'The server sent an empty response. Try again, or check the page in a browser.' },
-  FORBIDDEN_ORIGIN: { status: 403, title: 'This endpoint only serves the GEO Analyst app', hint: '' },
+  FORBIDDEN_ORIGIN: { status: 403, title: 'This endpoint only serves the GEO Bench app', hint: '' },
   UNKNOWN: { status: 502, title: 'The site could not be reached', hint: 'Try again. If it keeps failing, open the page in a browser to check that it loads.' }
 };
 

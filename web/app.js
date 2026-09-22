@@ -435,6 +435,9 @@ function renderError(url, e, stage) {
   enterApp(lastAudit.app || runMode);
   const rail = document.getElementById('dash-rail');
   if (rail) { rail.hidden = true; rail.innerHTML = ''; }
+  railOpen = false;
+  const rb = document.getElementById('rail-btn');
+  if (rb) { rb.hidden = true; rb.setAttribute('aria-pressed', 'false'); }
   document.getElementById('dash-split')?.classList.remove('has-rail');
   showScreen('screen-dashboard');
   document.getElementById('dash-content').innerHTML = `
@@ -636,14 +639,31 @@ at               ${GEO.esc((d.observed?.quotable || [])[0]?.at || '-')}</pre>
 
   // The skeleton belongs to a page, not a video: there is no HTML behind a video to draw.
   const rail = document.getElementById('dash-rail');
+  const railBtn = document.getElementById('rail-btn');
   if (rail) {
     const own = d.kind === 'platform';
-    rail.hidden = !own;
     rail.innerHTML = own ? SKEL.build(d) : '';
-    document.getElementById('dash-split')?.classList.toggle('has-rail', own);
-    // A frame if the tab is visible, a timer if it is not: one of the two always lands.
-    if (own) { requestAnimationFrame(() => SKEL.fit()); setTimeout(() => SKEL.fit(), 140); }
+    railOpen = false;
+    rail.hidden = true;
+    document.getElementById('dash-split')?.classList.remove('has-rail');
+    if (railBtn) { railBtn.hidden = !own; railBtn.setAttribute('aria-pressed', 'false'); }
   }
+}
+
+// The AI view sits beside the score rather than replacing it, so opening it is the one thing
+// that changes: the report underneath keeps its place on the page.
+let railOpen = false;
+function toggleRail(on) {
+  const rail = document.getElementById('dash-rail');
+  const split = document.getElementById('dash-split');
+  const btn = document.getElementById('rail-btn');
+  if (!rail || !rail.innerHTML) return;
+  railOpen = on === undefined ? !railOpen : !!on;
+  rail.hidden = !railOpen;
+  split?.classList.toggle('has-rail', railOpen);
+  if (btn) btn.setAttribute('aria-pressed', String(railOpen));
+  if (railOpen) { requestAnimationFrame(() => SKEL.fit()); setTimeout(() => SKEL.fit(), 140); }
+  else SKEL.clear();
 }
 
 // ===== RESULTS MOTION =====
@@ -689,7 +709,7 @@ const EVI_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 // on the page rather than being a claim on its own.
 document.addEventListener('click', e => {
   const sum = e.target.closest('details.evi > summary');
-  if (sum && typeof SKEL !== 'undefined') {
+  if (sum && railOpen && typeof SKEL !== 'undefined') {
     const det = sum.parentElement;
     if (det.open) SKEL.clear();
     else {
@@ -766,13 +786,17 @@ function readKeyOk() { try { return localStorage.getItem(KEY_OK_STORE) === '1'; 
 function storeKeyOk(v) { try { v ? localStorage.setItem(KEY_OK_STORE, '1') : localStorage.removeItem(KEY_OK_STORE); } catch {} }
 
 // The line under the URL bar always says where the key stands: which model is connected, or none yet.
+let serverKey = false;
 function syncConnected() {
   const ok = keyState === 'ok';
   document.querySelectorAll('.key-connected').forEach(line => {
     line.hidden = !panelEl().hidden;
     line.dataset.state = ok ? 'ok' : 'off';
     line.querySelector('.key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} connected` : 'No API key connected';
-    line.querySelector('.key-connected-action').textContent = ok ? 'Change' : 'Connect';
+    const act = line.querySelector('.key-connected-action');
+    act.hidden = serverKey;
+    line.querySelector('.key-connected-sep').hidden = serverKey;
+    act.textContent = ok ? 'Change' : 'Connect';
   });
 }
 function keyLineAction() {
@@ -1025,8 +1049,15 @@ const MODES = ['platform', 'social', 'youtube'];
 // (see brand/README.md) and it is used as is; until then the name stands in as text.
 // ratio is the file's own aspect, so the box width is known before the image decodes.
 const TYPE_BRAND = {
-  social: { name: 'Instagram', height: 17, navHeight: 15, ratio: 148.36 / 32.8 },
-  youtube: { name: 'YouTube', height: 14, navHeight: 12, ratio: 381 / 86 }
+  social: { name: 'Instagram', height: 17, navHeight: 15, ratio: 148.36 / 32.8, baseline: 0.246 },
+  youtube: { name: 'YouTube', height: 14, navHeight: 12, ratio: 381 / 86, baseline: 0.071 }
+};
+// The file's bottom edge sits on the text baseline; nudge it down by however much of the artwork
+// lives below the wordmark's own baseline, so the two baselines meet. Relative, so the offset
+// never feeds back into the flex container's baseline maths.
+const sitOnBaseline = (img, h, brand) => {
+  img.style.position = 'relative';
+  img.style.top = `${(h * (brand.baseline || 0)).toFixed(2)}px`;
 };
 let landingMode = 'platform';
 let modeToken = 0;
@@ -1119,6 +1150,7 @@ function setAppBrand(mode) {
     img.className = 'app-for-logo';
     img.alt = brand.name;
     img.height = brand.navHeight;
+    sitOnBaseline(img, brand.navHeight, brand);
     img.onerror = () => { mark.textContent = brand.name; };
     img.src = `brand/${mode}.svg`;
     mark.appendChild(img);
@@ -1143,6 +1175,7 @@ function setSubBrand(mode) {
     return;
   }
   if (!old) { line.classList.add('on'); fadeWord(word, true); }
+  else swapWord(word);
 
   // The files are preloaded, so the new mark is already there as the old one fades out.
   const img = new Image();
@@ -1150,6 +1183,7 @@ function setSubBrand(mode) {
   img.dataset.mode = mode;
   img.alt = brand.name;
   img.height = brand.height;
+  sitOnBaseline(img, brand.height, brand);
   img.onerror = () => {
     const word = document.createElement('span');
     word.className = `sub-word ${mode}`;
@@ -1192,6 +1226,20 @@ function markWidth(mark, width, glide, height) {
 
 // Fades one wordmark in, rising into place, or out and away. The timeout stands in for onfinish
 // when the tab is hidden and animations are paused.
+function swapWord(el) {
+  if (!el || reducedMotion() || !el.animate) return;
+  el.getAnimations().forEach(a => a.cancel());
+  const total = SWAP_IN.delay + SWAP_IN.duration;
+  const out = SWAP_OUT.duration / total;
+  const back = SWAP_IN.delay / total;
+  el.animate([
+    { opacity: 1, transform: 'translate3d(0, 0, 0)', easing: SWAP_OUT.easing, offset: 0 },
+    { opacity: 0, transform: 'translate3d(0, 0, 0)', easing: 'linear', offset: out },
+    { opacity: 0, transform: 'translate3d(0, 7px, 0)', easing: EASE, offset: back },
+    { opacity: 1, transform: 'translate3d(0, 0, 0)', offset: 1 }
+  ], { duration: total, easing: 'linear' });
+}
+
 function fadeMark(el, show, after) {
   if (!el) { after?.(); return; }
   if (show) {
@@ -1316,12 +1364,37 @@ function closeSoonPanel() {
   window.addEventListener('focus', returnedFromKeyTrip);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) returnedFromKeyTrip(); });
 
-  const stored = readStoredKey();
-  if (stored) JUDGE.prime(stored);
   const q = new URLSearchParams(location.search).get('url');
-  keyInput.value = stored;
   // A shared ?url= link runs once; the address is cleared so a refresh returns to the landing.
   if (q) { urlInput.value = q; history.replaceState(null, '', location.pathname); }
+
+  // If the deployment carries its own key, nobody has to bring one: the app is connected on
+  // arrival and the key panel never appears. Asking the server rather than assuming means a
+  // local copy with no key still behaves the old way.
+  (async () => {
+    let ready = false;
+    try {
+      const r = await fetch('/api/gemini?health=1', { cache: 'no-store' });
+      ready = r.ok && (await r.json()).ok === true;
+    } catch {}
+    if (!ready) return bringYourOwnKey();
+    serverKey = true;
+    JUDGE.useServer(true);
+    setKeyUi('ok');
+    syncConnected();
+    // Which model answers is still discovered, so the line names the real one rather than a guess.
+    JUDGE.verifyKey('').then(res => {
+      if (res.ok) syncConnected();
+      else { serverKey = false; JUDGE.useServer(false); setKeyUi('empty'); bringYourOwnKey(); }
+    });
+    if (q) startAnalysis();
+  })();
+
+  function bringYourOwnKey() {
+  const stored = readStoredKey();
+  if (stored) JUDGE.prime(stored);
+  keyInput.value = stored;
+
   if (stored && readKeyOk()) {
     setKeyUi('ok');
     // A shared ?url= link only auto-runs once the saved key is confirmed again.
@@ -1330,4 +1403,5 @@ function closeSoonPanel() {
   else setKeyUi('empty');
   // Fills the line under every audit type, including the ones no key check touches.
   syncConnected();
+  }
 })();

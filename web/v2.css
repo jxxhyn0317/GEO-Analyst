@@ -102,11 +102,7 @@ body { --key-a: #3B82F6; --key-b: #2563EB; --key-c: #1D4ED8; --key-bg: #EFF6FF; 
 body[data-mode="social"] { --key-a: #F58529; --key-b: #DD2A7B; --key-c: #8134AF; --key-bg: #FFF0F4; --name-a: #8134AF; --name-b: #DD2A7B; --name-c: #F58529; }
 body[data-mode="youtube"] { --key-a: #E32227; --key-b: #D8213F; --key-c: #C22159; --key-bg: #FDF1F2; --name-a: #C22159; --name-b: #D8213F; --name-c: #E32227; }
 .landing-container { background: linear-gradient(180deg, var(--white) 0%, var(--key-bg) 100%); }
-/* The mark reads from the same three variables as the wordmark beside it, so the two change by
-   one rule rather than two that drift apart. */
-#geoaGlyph stop:nth-child(1) { stop-color: var(--name-a); }
-#geoaGlyph stop:nth-child(2) { stop-color: var(--name-b); }
-#geoaGlyph stop:nth-child(3) { stop-color: var(--name-c); }
+/* The mark now carries the variables on its own shapes; see the symbol in index.html. */
 #screen-landing .product-name { background-image: linear-gradient(135deg, var(--name-a) 0%, var(--name-b) 45%, var(--name-c) 75%, var(--name-b) 100%); }
 /* The bar glow and outline take the active type’s key color. */
 /* No glow on the bar: hover and focus keep the resting shadow. */
@@ -125,7 +121,7 @@ a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
 /* The row bottom-aligns. Flex baseline alignment does not do what it looks like it should here,
    because the box holding the mark has no in-flow content to take a baseline from; measured,
    flex-end puts the mark's floor exactly on the word's baseline. */
-.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: flex-end; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; }
+.sub-brand { position: absolute; top: 100%; left: 0; right: 0; display: flex; align-items: baseline; justify-content: center; gap: 7px; margin: -22px 0 0; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; }
 .sub-brand.on { opacity: 1; }
 .sub-for { color: var(--gray-900); font-weight: 500; }
 /* Both wordmarks sit in the same box: the outgoing one fades out where it stands while the box
@@ -413,7 +409,7 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 @media print { .dash-nav { display: none; } details.evi { break-inside: avoid; } }
 
 /* AI suggested fixes: sits in each dimension card where "What to do" was. Generated text is
-   marked with the spark and the GEO Analyst blue gradient so it never reads as measured evidence. */
+   marked with the spark and the GEO Bench blue gradient so it never reads as measured evidence. */
 .ai-box { margin-top: 16px; padding: 14px 14px 14px; border: 1px solid transparent; border-radius: 12px;
   background: linear-gradient(180deg, #F8FAFF, #FFFFFF) padding-box, linear-gradient(135deg, #BFDBFE 0%, #93C5FD 45%, #DBEAFE 100%) border-box; }
 .ai-box:empty { display: none; }

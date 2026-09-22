@@ -1,5 +1,10 @@
 {
   "functions": {
-    "api/fetch.js": { "maxDuration": 30 }
+    "api/fetch.js": {
+      "maxDuration": 30
+    },
+    "api/gemini.js": {
+      "maxDuration": 60
+    }
   }
 }

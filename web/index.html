@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GEO Analyst</title>
+  <title>GEO Bench</title>
   <meta name="description" content="Technical GEO analysis of a single page: URL context, page structure, answerability and schema markup, scored on a verifiable checklist.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="v2.css?v=103">
+  <link rel="stylesheet" href="v2.css?v=104">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -31,11 +31,11 @@
         <stop offset="1" stop-color="var(--key-c)"/>
       </linearGradient>
       <symbol id="geoa-mark" viewBox="0 0 36 36">
-        <path d="M18 20.3 6.4 28.85M18 20.3 29.6 28.85M18 20.3V7.15" fill="none" stroke="url(#geoaGlyph)" stroke-width="2.8" stroke-linecap="round" stroke-opacity="0.55"/>
-        <circle cx="18" cy="7.15" r="4.2" fill="url(#geoaGlyph)"/>
-        <circle cx="6.4" cy="28.85" r="4.2" fill="url(#geoaGlyph)"/>
-        <circle cx="29.6" cy="28.85" r="4.2" fill="url(#geoaGlyph)"/>
-        <circle cx="18" cy="20.3" r="3.1" fill="url(#geoaGlyph)"/>
+        <path d="M18 20.3 6.4 28.85M18 20.3 29.6 28.85M18 20.3V7.15" fill="none" stroke-width="2.8" stroke-linecap="round" stroke-opacity="0.55" style="stroke: var(--name-b)"/>
+        <circle cx="18" cy="7.15" r="4.2" style="fill: var(--name-a)"/>
+        <circle cx="6.4" cy="28.85" r="4.2" style="fill: color-mix(in srgb, var(--name-b) 65%, var(--name-a))"/>
+        <circle cx="29.6" cy="28.85" r="4.2" style="fill: var(--name-c)"/>
+        <circle cx="18" cy="20.3" r="3.1" style="fill: var(--name-b)"/>
       </symbol>
     </defs>
   </svg>
@@ -45,11 +45,11 @@
       <div class="landing-container">
         <div class="landing-content">
           <div class="title-block">
-          <a class="logo-area" href="./" title="Reload GEO Analyst">
+          <a class="logo-area" href="./" title="Reload GEO Bench">
             <div class="logo-icon">
               <svg class="geoa-mark" width="44" height="44" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
             </div>
-            <h1 class="product-name">GEO Analyst</h1>
+            <h1 class="product-name">GEO Bench</h1>
           </a>
           <p class="sub-brand" id="sub-brand" aria-hidden="true"><span class="sub-for">for</span><span class="sub-mark" id="sub-mark"></span></p>
           </div>
@@ -76,7 +76,7 @@
             </div>
             <p class="key-connected" data-state="off" hidden>
               <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
+              <span class="key-connected-label">No API key connected</span> <span class="key-connected-sep" aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
             </p>
           </div>
           </section>
@@ -93,7 +93,7 @@
               </div>
             <p class="key-connected" data-state="off" hidden>
               <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
+              <span class="key-connected-label">No API key connected</span> <span class="key-connected-sep" aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
             </p>
             </div>
           </section>
@@ -111,14 +111,14 @@
             <p class="bar-msg" id="video-msg" role="alert" hidden></p>
             <p class="key-connected" data-state="off" hidden>
               <svg class="kc-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span class="key-connected-label">No API key connected</span> <span aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
+              <span class="key-connected-label">No API key connected</span> <span class="key-connected-sep" aria-hidden="true">·</span> <button type="button" class="key-change key-connected-action" onclick="keyLineAction()">Connect</button>
             </p>
             </div>
           </section>
           </div>
         </div>
         <footer class="landing-footer">
-          <a href="v1/" title="Open the previous version (v1)">GEO Analyst v2.0</a>
+          <a href="v1/" title="Open the previous version (v1)">GEO Bench v2.0</a>
           <p class="landing-copyright">© 2026. Cheil NewTech Business Center All rights reserved.</p>
         </footer>
       </div>
@@ -133,7 +133,7 @@
             <svg class="kp-ico-ok" width="44" height="44" viewBox="0 0 44 44" fill="none"><circle class="kp-ok-fill" cx="22" cy="22" r="20" fill="#16A34A"/><path class="kp-ok-check" d="M13.5 22.5l5.5 5.5 11.5-12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <h2 class="kp-title" id="kp-title">Enter API key to continue</h2>
-          <p class="kp-sub" id="kp-sub">GEO Analyst reads the page with your AI API key: Gemini, Claude or OpenAI. It stays in this browser.</p>
+          <p class="kp-sub" id="kp-sub">GEO Bench reads the page with your AI API key: Gemini, Claude or OpenAI. It stays in this browser.</p>
           <div class="api-key-row kp-row">
             <input type="password" id="api-key-input" class="api-key-input" placeholder="API key (Gemini, Claude or OpenAI)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Gemini API key" aria-describedby="key-msg">
             <button type="button" class="btn-primary kp-continue" id="kp-continue" onclick="connectKey()" disabled><span class="kp-spin" aria-hidden="true"></span><svg class="kp-btn-ok" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="kp-btn-label">Paste a key</span></button>
@@ -172,7 +172,7 @@
         <div class="loading-header">
           <div class="loading-logo app-brand">
             <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
-            <span class="loading-brand app-brand-name">GEO Analyst</span>
+            <span class="loading-brand app-brand-name">GEO Bench</span>
           <span class="app-for" id="loading-for" hidden><span class="app-for-word">for</span><span class="app-for-mark"></span></span>
             <span class="app-brand-copy">© 2026. Cheil NewTech Business Center All rights reserved.</span>
           </div>
@@ -213,11 +213,12 @@
       <nav class="dash-nav">
         <div class="dash-nav-left app-brand">
           <svg class="geoa-mark" width="24" height="24" viewBox="0 0 36 36" aria-hidden="true"><use href="#geoa-mark"/></svg>
-          <span class="dash-nav-brand app-brand-name">GEO Analyst</span>
+          <span class="dash-nav-brand app-brand-name">GEO Bench</span>
           <span class="app-for" id="dash-for" hidden><span class="app-for-word">for</span><span class="app-for-mark"></span></span>
           <span class="app-brand-copy">© 2026. Cheil NewTech Business Center All rights reserved.</span>
         </div>
         <div class="dash-nav-right">
+          <button class="btn-ghost" id="rail-btn" onclick="toggleRail()" hidden aria-pressed="false">AI view</button>
           <button class="btn-ghost" onclick="showLanding()">New Analysis</button>
           <button class="btn-outline" id="export-pdf-btn" onclick="exportPdf(this)">Export PDF</button>
         </div>
@@ -230,11 +231,11 @@
   </div>
 
   <script src="engine.js?v=6"></script>
-  <script src="judge.js?v=11"></script>
+  <script src="judge.js?v=12"></script>
   <script src="fixes.js?v=8"></script>
   <script src="pdf.js?v=3"></script>
   <script src="youtube.js?v=4"></script>
   <script src="skeleton.js?v=18"></script>
-  <script src="app.js?v=73"></script>
+  <script src="app.js?v=78"></script>
 </body>
 </html>

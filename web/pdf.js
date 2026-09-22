@@ -118,7 +118,7 @@ const PDF = (() => {
         pdf.setPage(i);
         pdf.setFontSize(8);
         pdf.setTextColor(148, 163, 184);
-        pdf.text(`GEO Analyst${site ? ` · ${site}` : ''}`, 10, h - 6);
+        pdf.text(`GEO Bench${site ? ` · ${site}` : ''}`, 10, h - 6);
         pdf.text(`${i} / ${n}`, w - 10, h - 6, { align: 'right' });
       }
     });
