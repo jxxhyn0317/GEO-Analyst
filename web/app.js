@@ -1164,7 +1164,7 @@ function setSubBrand(mode) {
   const brand = TYPE_BRAND[mode];
   line.setAttribute('aria-hidden', String(!brand));
   if (mark.dataset.mode === mode) return;
-  const had = !!mark.dataset.mode;
+  const had = !!TYPE_BRAND[mark.dataset.mode];
   mark.dataset.mode = mode;
 
   // Exchanging the logo while nothing is on screen, rather than crossfading one over the other,
@@ -1178,6 +1178,7 @@ function setSubBrand(mode) {
     img.className = 'sub-logo';
     img.alt = brand.name;
     img.height = brand.height;
+    img.width = Math.round(brand.height * brand.ratio);
     // Relative, so the drop never feeds back into the line's baseline maths.
     img.style.top = `${(brand.height * (brand.baseline || 0)).toFixed(2)}px`;
     img.onerror = () => {
