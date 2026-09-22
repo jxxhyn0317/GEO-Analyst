@@ -42,8 +42,9 @@ function startAnalysis() {
 // reading a page. The list is rewritten before each run so the steps are honest.
 const PAGE_STEPS = ['Reading the page the way AI crawlers do', 'Parsing headings, text and markup',
   'D1 \u00b7 URL and page context', 'D2 \u00b7 Page structure', 'D3 \u00b7 Answerability and content depth',
-  'D4 \u00b7 Schema markup', 'Reading heading labels and the opening',
-  'Weighing citable facts and first-hand experience', 'Writing the diagnosis and next steps', 'Report ready'];
+  'D4 \u00b7 Schema markup', 'Reading the heading labels', 'Judging the opening answer',
+  'Weighing citable facts', 'Looking for first-hand experience',
+  'Writing the diagnosis and next steps', 'Report ready'];
 const VIDEO_STEPS = ['Handing the video to the model', 'Walking the timeline and reading the transcript',
   'Listening for the opening and the direct answer', 'Following the spoken structure',
   'Collecting sentences that stand on their own', 'Collecting numbers, dates and names',
@@ -165,22 +166,22 @@ function progress(i, seconds = 1) {
 // step, the active step shows elapsed seconds, and the steps advance on a schedule.
 function modelPacing() {
   const steps = document.querySelectorAll('.step-item');
-  const t0 = performance.now();
+  // The model's wait is the only part that actually takes time, so it gets a run of steps rather
+  // than one label to sit on. Something changes every few seconds, which is what stops a wait
+  // from reading as a stall. No elapsed counter: a number ticking upward on a step you cannot
+  // hurry turns an ambient wait into one the reader watches, and watched waits feel longer.
   const timers = [
-    setTimeout(() => progress(7, 5), 3000),
-    setTimeout(() => { progress(8, 12); note('Writing the diagnosis and next steps'); }, 7500),
-    setTimeout(() => note('Still working. Longer pages take more time.', 'yellow'), 18000),
-    setTimeout(() => note('Almost there. Waiting for the model to finish.', 'yellow'), 40000)
+    setTimeout(() => progress(7, 3), 2500),
+    setTimeout(() => progress(8, 4), 5500),
+    setTimeout(() => progress(9, 4.5), 9500),
+    setTimeout(() => { progress(10, 10); note('Writing the diagnosis and next steps'); }, 14000),
+    setTimeout(() => note('Still working. Longer pages take more time.', 'yellow'), 26000),
+    setTimeout(() => note('Almost there. Waiting for the model to finish.', 'yellow'), 45000)
   ];
+  // However long it takes, the bar keeps reaching into the next band slowly enough that it never
+  // runs out of track before the answer lands.
   const ticker = setInterval(() => {
-    // However long the model takes, the bar keeps reaching into the next band, slowly enough
-    // that it never runs out of track before the answer arrives.
-    aimPct(Math.min(((currentStep + 2) / steps.length) * 100 - 2, 96), 30);
-    const active = steps[currentStep];
-    if (!active) return;
-    let t = active.querySelector('.step-time');
-    if (!t) { t = document.createElement('span'); t.className = 'step-time'; active.appendChild(t); }
-    t.textContent = Math.floor((performance.now() - t0) / 1000) + 's';
+    aimPct(Math.min(((currentStep + 2) / steps.length) * 100 - 2, 95), 30);
   }, 1000);
   return () => { timers.forEach(clearTimeout); clearInterval(ticker); };
 }
@@ -235,18 +236,26 @@ async function runAnalysis(url, apiKey) {
     note(`${result.measure.headings.length} content headings · ${result.measure.substantiveChars.toLocaleString('en-US')} chars of substantive text`);
     if (result.measure.jsHeavy) note('Very little text in the raw HTML; the content likely renders with JavaScript', 'red');
 
-    progress(2, 0.85); await tick();
-    note(`D1 URL & Page Context: ${d1.score}/100`, colorOf(d1.score));
-    progress(3, 0.85); await tick();
-    note(`D2 Page Structure: ${d2.score}/100`, colorOf(d2.score));
-    progress(4, 0.85); await tick();
-    note(`D3 Answerability & Content Depth: ${d3.score}/100`, colorOf(d3.score));
-    progress(5, 0.85); await tick();
-    note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
-
     stage = 'gemini';
     lastAudit.result = result;
-    await geminiStage(result, apiKey);
+    const held = [];
+    let liveNotes = false;
+    const modelNote = (msg, kind) => { liveNotes ? note(msg, kind) : held.push([msg, kind]); };
+    const judging = JUDGE.judge(apiKey, result, modelNote);
+    judging.catch(() => {});
+
+    progress(2, 0.7); await tick(700);
+    note(`D1 URL & Page Context: ${d1.score}/100`, colorOf(d1.score));
+    progress(3, 0.7); await tick(700);
+    note(`D2 Page Structure: ${d2.score}/100`, colorOf(d2.score));
+    progress(4, 0.7); await tick(700);
+    note(`D3 Answerability & Content Depth: ${d3.score}/100`, colorOf(d3.score));
+    progress(5, 0.7); await tick(700);
+    note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
+
+    liveNotes = true;
+    held.forEach(([m, k]) => note(m, k));
+    await geminiStage(result, apiKey, judging);
   } catch (err) {
     console.error(err);
     const e = err instanceof AuditError ? err : new AuditError('UNKNOWN', err.message);
@@ -255,17 +264,17 @@ async function runAnalysis(url, apiKey) {
   }
 }
 
-async function geminiStage(result, apiKey) {
-  progress(6, 4);
+async function geminiStage(result, apiKey, started) {
+  progress(6, 3);
   note('Reading the page like an answer engine: heading labels, the opening, citable facts');
   const t1 = performance.now();
   const stopPacing = modelPacing();
   let judgment;
-  try { judgment = await JUDGE.judge(apiKey, result, note); }
+  try { judgment = await (started || JUDGE.judge(apiKey, result, note)); }
   finally { stopPacing(); }
   GEO.applyJudgment(result, judgment);
   note(`AI judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
-  progress(9);
+  progress(PAGE_STEPS.length - 1);
   note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
   finishLoading();
   currentData = result;
