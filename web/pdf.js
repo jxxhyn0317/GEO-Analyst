@@ -128,7 +128,7 @@ const PDF = (() => {
     if (btn.disabled) return;
     // Error screens have no report to save; keep the old behavior there.
     if (!currentData || !document.querySelector('#dash-content .score-card')) { window.print(); return; }
-    const label = btn.textContent;
+    const label = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="pdf-spin" aria-hidden="true"></span>Preparing PDF…';
     let built = null;
@@ -138,10 +138,10 @@ const PDF = (() => {
       built = buildExport();
       await worker(built.host, fileName(currentData)).save();
       btn.textContent = 'Saved';
-      setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 1400);
+      setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1400);
     } catch (e) {
       console.error(e);
-      btn.textContent = label;
+      btn.innerHTML = label;
       btn.disabled = false;
       window.print();
     } finally {

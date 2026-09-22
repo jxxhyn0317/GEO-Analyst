@@ -725,7 +725,10 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
   /* 16px or iOS zooms the page when the field takes focus. */
   #screen-landing .url-input-wrapper input, .soon-bar input { font-size: 16px; }
 }
+.lbl-tight { display: none; }
 @media (max-width: 560px) {
-  /* The mark still says whose report this is; the name would push the controls off the row. */
-  .dash-nav .dash-nav-brand { display: none; }
+  /* The name stays; the buttons give up their second word instead. */
+  .lbl-wide { display: none; }
+  .lbl-tight { display: inline; }
+  .dash-nav-right button { padding: 8px 12px; }
 }
