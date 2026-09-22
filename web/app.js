@@ -168,8 +168,8 @@ function modelPacing() {
   const steps = document.querySelectorAll('.step-item');
   // The model's wait is the only part that actually takes time, so it gets a run of steps rather
   // than one label to sit on. Something changes every few seconds, which is what stops a wait
-  // from reading as a stall. No elapsed counter: a number ticking upward on a step you cannot
-  // hurry turns an ambient wait into one the reader watches, and watched waits feel longer.
+  // from reading as a stall.
+  const t0 = performance.now();
   const timers = [
     setTimeout(() => progress(7, 3), 2500),
     setTimeout(() => progress(8, 4), 5500),
@@ -182,6 +182,11 @@ function modelPacing() {
   // runs out of track before the answer lands.
   const ticker = setInterval(() => {
     aimPct(Math.min(((currentStep + 2) / steps.length) * 100 - 2, 95), 30);
+    const active = steps[currentStep];
+    if (!active) return;
+    let t = active.querySelector('.step-time');
+    if (!t) { t = document.createElement('span'); t.className = 'step-time'; active.appendChild(t); }
+    t.textContent = Math.floor((performance.now() - t0) / 1000) + 's';
   }, 1000);
   return () => { timers.forEach(clearTimeout); clearInterval(ticker); };
 }
