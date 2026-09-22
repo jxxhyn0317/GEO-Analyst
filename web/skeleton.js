@@ -213,6 +213,8 @@ const SKEL = (() => {
     }
   }
 
+  const phone = () => matchMedia('(max-width: 700px)').matches;
+
   let watcher = null;
   let watched = null;
   function fit() {
@@ -227,6 +229,13 @@ const SKEL = (() => {
       watcher = new ResizeObserver(() => fit());
       watched = stage;
       watcher.observe(stage);
+    }
+    if (phone()) {
+      inner.style.transform = 'none';
+      inner.style.width = '';
+      applyDepth(9);
+      inner.style.visibility = 'visible';
+      return;
     }
     if (stage.clientHeight < 60) return;
     const pad = getComputedStyle(stage);

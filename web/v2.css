@@ -695,3 +695,37 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
   .skel-fit [data-anchor="wanted"] { grid-column: 2; grid-row: 2; margin-bottom: 0; }
   .sk-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== PHONES =====
+   The drawing stops pretending to be one screen here. Beside the score it is pinned and has to
+   fit; on a phone it is one more block on a page that already scrolls, and forcing it into a
+   fixed box only bought ten-pixel type and a clipped last card. It runs at full size. */
+@media (max-width: 700px) {
+  .dash-split.has-rail { padding: 16px 16px 0; }
+  .dash-rail { height: auto; max-width: none; margin-bottom: 16px; }
+  .skel { height: auto; }
+  .skel-stage { overflow: visible; padding: 14px 16px 16px; }
+  .skel-fit { display: block; }
+  .skel-head { padding: 14px 16px 12px; }
+  .sk-aside { margin-left: 0; flex-basis: 100%; }
+  .sk-grid { grid-template-columns: 1fr 1fr; }
+  .sk-node.lvl2 { margin-left: 10px; padding-left: 10px; }
+  .sk-node.lvl3 { margin-left: 22px; padding-left: 10px; }
+  .sk-node.lvl4 { margin-left: 32px; padding-left: 10px; }
+}
+
+/* The report bar carries three controls now, which stopped fitting beside the name. */
+@media (max-width: 600px) {
+  .dash-nav { padding-left: 14px; padding-right: 14px; gap: 6px; }
+  .dash-nav-right { gap: 5px; }
+  .dash-nav-right button { min-height: 40px; padding: 8px 11px; font-size: 12.5px; }
+  .mode-tab { min-height: 40px; }
+  .err-actions .err-btn, .key-connected-action { min-height: 40px; }
+  #screen-landing .url-input-wrapper .btn-primary, .soon-bar .btn-soon { min-height: 40px; }
+  /* 16px or iOS zooms the page when the field takes focus. */
+  #screen-landing .url-input-wrapper input, .soon-bar input { font-size: 16px; }
+}
+@media (max-width: 560px) {
+  /* The mark still says whose report this is; the name would push the controls off the row. */
+  .dash-nav .dash-nav-brand { display: none; }
+}
