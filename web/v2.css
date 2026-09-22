@@ -131,11 +131,10 @@ a.logo-area:hover .logo-icon svg { filter: none; transform: none; }
 /* The box is exactly as tall as the mark it holds and the mark sits on its floor, so the box's
    own bottom edge is what the row lines up on. Its height is set with its width when the mark
    changes, since the two marks are not the same height. */
-.sub-mark { position: relative; display: inline-block; transition: width .11s ease-in; }
-.sub-mark > * { position: absolute; left: 0; bottom: 0; }
-.sub-logo { display: block; }
+.sub-mark { display: inline-block; font-size: 0; line-height: 0; }
+.sub-logo { display: inline-block; vertical-align: baseline; position: relative; }
 /* Stand-in until the official wordmark file is dropped in. */
-.sub-word { position: static; font-weight: 700; letter-spacing: -0.2px; }
+.sub-word { display: inline-block; font-size: 14px; line-height: 1; font-weight: 700; letter-spacing: -0.2px; }
 .sub-word.social { background: linear-gradient(120deg, #F58529 0%, #DD2A7B 55%, #8134AF 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: #8134AF; }
 .sub-word.youtube { color: #CD2730; }
 .mode-tabs { position: relative; display: inline-flex; gap: 2px; margin: 0 0 20px; padding: 2px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
@@ -499,7 +498,7 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
 .ai-error b { display: block; font-size: 13px; color: var(--gray-900); }
 .ai-error span { font-size: 12.5px; color: var(--gray-500); }
 @media (prefers-reduced-motion: reduce) {
-  .mode-ind, .sub-mark { transition: none; }
+  .mode-ind { transition: none; }
   #screen-loading .progress-fill::after, #screen-loading .step-item.active .step-indicator::before,
   #screen-loading .step-item.active .step-indicator::after, #screen-loading .step-item.done .step-indicator::after,
   #screen-loading.active .steps-list .step-item { animation: none; }

@@ -1161,97 +1161,52 @@ function setSubBrand(mode) {
   setAppBrand(mode);
   const line = document.getElementById('sub-brand');
   const mark = document.getElementById('sub-mark');
-  const word = line.querySelector('.sub-for');
   const brand = TYPE_BRAND[mode];
   line.setAttribute('aria-hidden', String(!brand));
+  if (mark.dataset.mode === mode) return;
+  const had = !!mark.dataset.mode;
+  mark.dataset.mode = mode;
 
-  const old = mark.lastElementChild;
-  if (old && old.dataset.mode === mode) return;
-  // "for" and the mark arrive and leave together, on the same curve: the line itself never fades,
-  // or the word would be there before the logo it belongs to.
-  if (!brand) {
-    fadeWord(word, false, () => line.classList.remove('on'));
-    fadeMark(old, false, () => { markWidth(mark, '0px', false); });
-    return;
-  }
-  if (!old) { line.classList.add('on'); fadeWord(word, true); }
-  else swapWord(word);
-
-  // The files are preloaded, so the new mark is already there as the old one fades out.
-  const img = new Image();
-  img.className = 'sub-logo';
-  img.dataset.mode = mode;
-  img.alt = brand.name;
-  img.height = brand.height;
-  sitOnBaseline(img, brand.height, brand);
-  img.onerror = () => {
-    const word = document.createElement('span');
-    word.className = `sub-word ${mode}`;
-    word.dataset.mode = mode;
-    word.textContent = brand.name;
-    img.replaceWith(word);
-    mark.style.width = '';
+  // Exchanging the logo while nothing is on screen, rather than crossfading one over the other,
+  // is what lets "for" and the wordmark be one object: only one mark is ever in the layout, so
+  // the line has a real baseline and never changes width while it is visible.
+  const put = () => {
+    mark.textContent = '';
+    line.classList.toggle('on', !!brand);
+    if (!brand) return;
+    const img = new Image();
+    img.className = 'sub-logo';
+    img.alt = brand.name;
+    img.height = brand.height;
+    // Relative, so the drop never feeds back into the line's baseline maths.
+    img.style.top = `${(brand.height * (brand.baseline || 0)).toFixed(2)}px`;
+    img.onerror = () => {
+      const w = document.createElement('span');
+      w.className = `sub-word ${mode}`;
+      w.textContent = brand.name;
+      img.replaceWith(w);
+    };
+    img.src = `brand/${mode}.svg`;
+    mark.appendChild(img);
   };
-  img.src = `brand/${mode}.svg`;
-  mark.appendChild(img);
-  // Coming from Platform there is no old width to glide from, so the box takes its size at once
-  // and the mark rises straight up instead of drifting in from the right.
-  markWidth(mark, `${Math.round(brand.height * brand.ratio)}px`, !!old, `${brand.height}px`);
-  fadeMark(old, false);
-  fadeMark(img, true);
-}
 
-// Moves "for" exactly as the mark beside it moves. It stays put between two types: there it only
-// glides sideways as the box changes width.
-function fadeWord(el, show, after) {
-  if (reducedMotion() || !el.animate) { after?.(); return; }
-  // The fade out is held, so clear it before fading back in or the word snaps away at the end.
-  el.getAnimations().forEach(a => a.cancel());
-  const a = el.animate(show ? SWAP_RISE : SWAP_FADE, show ? SWAP_IN : SWAP_OUT);
-  if (!after) return;
+  if (reducedMotion() || !line.animate) { put(); return; }
+  line.getAnimations().forEach(an => an.cancel());
+  // Arriving from Platform there is nothing to take away, so the line only comes in.
+  if (!had) { put(); if (brand) line.animate(SWAP_RISE, SWAP_IN); return; }
+
+  const out = line.animate(SWAP_FADE, { ...SWAP_OUT, fill: 'forwards' });
   let done = false;
-  const once = () => { if (!done) { done = true; after(); } };
-  a.onfinish = once;
-  setTimeout(once, 400);
-}
-
-// Sets the wordmark box's width. It glides only when there are two marks to glide between, and
-// then only for as long as the old mark takes to fade, so the new one arrives at a settled spot.
-function markWidth(mark, width, glide, height) {
-  if (!glide) mark.style.transition = 'none';
-  mark.style.width = width;
-  if (height !== undefined) mark.style.height = height;
-  if (!glide) { mark.getBoundingClientRect(); mark.style.transition = ''; }
-}
-
-// Fades one wordmark in, rising into place, or out and away. The timeout stands in for onfinish
-// when the tab is hidden and animations are paused.
-function swapWord(el) {
-  if (!el || reducedMotion() || !el.animate) return;
-  el.getAnimations().forEach(a => a.cancel());
-  const total = SWAP_IN.delay + SWAP_IN.duration;
-  const out = SWAP_OUT.duration / total;
-  const back = SWAP_IN.delay / total;
-  el.animate([
-    { opacity: 1, transform: 'translate3d(0, 0, 0)', easing: SWAP_OUT.easing, offset: 0 },
-    { opacity: 0, transform: 'translate3d(0, 0, 0)', easing: 'linear', offset: out },
-    { opacity: 0, transform: 'translate3d(0, 7px, 0)', easing: EASE, offset: back },
-    { opacity: 1, transform: 'translate3d(0, 0, 0)', offset: 1 }
-  ], { duration: total, easing: 'linear' });
-}
-
-function fadeMark(el, show, after) {
-  if (!el) { after?.(); return; }
-  if (show) {
-    if (!reducedMotion() && el.animate) el.animate(SWAP_RISE, SWAP_IN);
-    return;
-  }
-  const drop = () => { el.remove(); after?.(); };
-  if (reducedMotion() || !el.animate) { drop(); return; }
-  let done = false;
-  const once = () => { if (!done) { done = true; drop(); } };
-  el.animate(SWAP_FADE, SWAP_OUT).onfinish = once;
-  setTimeout(once, 400);
+  const go = () => {
+    if (done) return;
+    done = true;
+    put();
+    out.cancel();
+    if (brand) line.animate(SWAP_RISE, { duration: SWAP_IN.duration, easing: SWAP_IN.easing });
+  };
+  out.onfinish = go;
+  // Animations pause in background tabs, so the exchange is guaranteed on a timer either way.
+  setTimeout(go, SWAP_OUT.duration + 80);
 }
 
 // Keeps the tint pill on the active tab. Measured, so it survives font loads and resizes.
