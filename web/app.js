@@ -792,7 +792,7 @@ function syncConnected() {
   document.querySelectorAll('.key-connected').forEach(line => {
     line.hidden = !panelEl().hidden;
     line.dataset.state = ok ? 'ok' : 'off';
-    line.querySelector('.key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} connected` : 'No API key connected';
+    line.querySelector('.key-connected-label').textContent = ok ? `${JUDGE.modelLabel()} API Connected` : 'No API key connected';
     const act = line.querySelector('.key-connected-action');
     act.hidden = serverKey;
     line.querySelector('.key-connected-sep').hidden = serverKey;
