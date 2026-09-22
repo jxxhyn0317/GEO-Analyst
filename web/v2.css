@@ -719,11 +719,7 @@ details.evi[open]:not(.closing) > summary::before { transform: rotate(90deg); }
   .dash-nav { padding-left: 14px; padding-right: 14px; gap: 6px; }
   .dash-nav-right { gap: 5px; }
   .dash-nav-right button { min-height: 40px; padding: 8px 11px; font-size: 12.5px; }
-  .mode-tab { min-height: 40px; }
-  .err-actions .err-btn, .key-connected-action { min-height: 40px; }
-  #screen-landing .url-input-wrapper .btn-primary, .soon-bar .btn-soon { min-height: 40px; }
-  /* 16px or iOS zooms the page when the field takes focus. */
-  #screen-landing .url-input-wrapper input, .soon-bar input { font-size: 16px; }
+  .err-actions .err-btn { min-height: 40px; }
 }
 .lbl-tight { display: none; }
 @media (max-width: 560px) {
