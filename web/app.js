@@ -1145,6 +1145,19 @@ function setMode(mode) {
   }, 420);
 }
 
+// The three tabs are stacked in one grid cell and each lays its own bar out under its own
+// sentence, but only Platform's wrapper carries the white pill so the bar looks continuous across
+// a switch. That only holds while the sentences wrap to the same number of lines: at 420px
+// Platform takes four and Social takes three, and the pill sat 26px below the button it belonged
+// to. Reserving the tallest sentence's height on all three puts every bar on one line.
+function syncTaglineHeight() {
+  const els = [...document.querySelectorAll('.mode-slide .product-tagline')];
+  if (!els.length) return;
+  els.forEach(e => { e.style.minHeight = ''; });
+  const tallest = Math.max(...els.map(e => e.getBoundingClientRect().height));
+  els.forEach(e => { e.style.minHeight = `${Math.ceil(tallest)}px`; });
+}
+
 // The type's own wordmark under the title. The mark cross-fades and the box glides to the new
 // width, so switching types reads as one movement instead of a swap.
 // The same "for Instagram" mark the landing shows, beside the name on the inner screens, so the
@@ -1293,7 +1306,10 @@ function closeSoonPanel() {
   positionModeIndicator(false);
   document.fonts?.ready.then(() => positionModeIndicator(false));
   new ResizeObserver(() => positionModeIndicator(false)).observe(document.querySelector('.mode-tabs'));
-  addEventListener('resize', () => { if (typeof SKEL !== 'undefined') SKEL.fit(); });
+  addEventListener('resize', () => { if (typeof SKEL !== 'undefined') SKEL.fit(); syncTaglineHeight(); });
+  syncTaglineHeight();
+  // Web fonts land after first paint and change how the sentences wrap.
+  document.fonts?.ready.then(syncTaglineHeight);
   document.querySelector('.mode-tabs').addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const m = MODES[(MODES.indexOf(landingMode) + (e.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length];
