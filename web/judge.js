@@ -76,9 +76,10 @@ const JUDGE = (() => {
       const k = `${legacy ? 'L' : 'I'}:${model}`;
       if (model && !seen.has(k)) { seen.add(k); list.push({ model, legacy }); }
     };
+    add(GEMINI_FALLBACK_MODEL, true);
+    ids.forEach(id => add(id, true));
     add(GEMINI_FALLBACK_MODEL, false);
     ids.forEach(id => add(id, false));
-    ids.forEach(id => add(id, true));
     return list;
   }
 
@@ -89,9 +90,9 @@ const JUDGE = (() => {
       active.legacy = c.legacy;
       let resp;
       try {
-        resp = await request(endpoint(key), {
-          method: 'POST', headers: headersFor(key), timeout: 15000,
-          body: JSON.stringify(bodyFor('Answer {"ok":true}', PROBE_SCHEMA, 32, 0))
+        resp = await request(endpoint(key, c.legacy), {
+          method: 'POST', headers: headersFor(key, c.legacy), timeout: 15000,
+          body: JSON.stringify(bodyFor('Answer {"ok":true}', PROBE_SCHEMA, 32, 0, null, null, c.legacy))
         });
       } catch { last = 'GEMINI_NETWORK'; continue; }  // never left the browser: prove nothing, try the next
       if (resp.ok) return { ok: true, ...c };
@@ -215,11 +216,11 @@ ${JSON.stringify(input)}`;
     if (e.status === 404 || /NOT_FOUND|is not found|not supported for|model_not_found/i.test(msg)) return new AuditError('MODEL_MISSING', detail);
     return new AuditError('GEMINI_OTHER', detail);
   }
-  const headersFor = key => {
+  const headersFor = (key, legacy = active.legacy) => {
     const k = key.trim();
     if (active.provider === 'anthropic') return { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
     if (active.provider === 'openai') return { 'Content-Type': 'application/json', Authorization: `Bearer ${k}` };
-    if (active.legacy) return { 'Content-Type': 'application/json' };
+    if (legacy) return { 'Content-Type': 'application/json' };
     // The docs also send Api-Revision, but a browser cannot: it is not allowed through the
     // preflight and every call fails before it leaves. The endpoint takes requests without it.
     // The proxy adds the credential; sending an empty one here would only invite a 400.
@@ -237,15 +238,15 @@ ${JSON.stringify(input)}`;
     ? '/api/gemini?models=1'
     : `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(String(key || '').trim())}`;
 
-  function endpoint(key) {
+  function endpoint(key, legacy = active.legacy) {
     if (active.provider === 'anthropic') return 'https://api.anthropic.com/v1/messages';
     if (active.provider === 'openai') return 'https://api.openai.com/v1/chat/completions';
-    if (server) return active.legacy ? `/api/gemini?legacy=${encodeURIComponent(active.model)}` : '/api/gemini';
-    if (active.legacy) return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
+    if (server) return legacy ? `/api/gemini?legacy=${encodeURIComponent(active.model)}` : '/api/gemini';
+    if (legacy) return `https://generativelanguage.googleapis.com/v1beta/models/${active.model}:generateContent?key=${encodeURIComponent(key.trim())}`;
     return 'https://generativelanguage.googleapis.com/v1beta/interactions';
   }
 
-  function bodyFor(prompt, schema, maxTokens, thinking, video, tools) {
+  function bodyFor(prompt, schema, maxTokens, thinking, video, tools, legacy = active.legacy) {
     if (active.provider === 'anthropic') return {
       model: active.model, max_tokens: maxTokens, temperature: 0,
       messages: [{ role: 'user', content: prompt }],
@@ -257,7 +258,7 @@ ${JSON.stringify(input)}`;
       if (/^gpt-4/.test(active.model)) b.temperature = 0; // GPT-5 models accept only the default
       return b;
     }
-    if (active.legacy) return {
+    if (legacy) return {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: thinking } }
     };
@@ -302,13 +303,14 @@ ${JSON.stringify(input)}`;
   // AuditError codes the app can explain.
   async function call(apiKey, prompt, schema, { maxTokens = 8192, thinking = 1024, note, video, tools } = {}) {
     prime(apiKey);
-    if (video && active.legacy) throw new AuditError('VIDEO_UNSUPPORTED', 'the older API surface has no video input');
-    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking, video, tools));
+    // Only Interactions can take a video, so that one call uses it whatever is stored.
+    const legacy = video ? false : active.legacy;
+    const body = JSON.stringify(bodyFor(prompt, schema, maxTokens, thinking, video, tools, legacy));
     // Watching a video takes far longer than reading a page.
     const timeout = video ? 300000 : TIMEOUT_MS;
     let resp, repicked = false;
     for (let attempt = 0; attempt < 3; attempt++) {
-      resp = await request(endpoint(apiKey), { method: 'POST', headers: headersFor(apiKey), body, timeout });
+      resp = await request(endpoint(apiKey, legacy), { method: 'POST', headers: headersFor(apiKey, legacy), body, timeout });
       // The model name went away. Ask the key what it can run now and retry once.
       if (resp.status === 404 && active.provider === 'gemini' && !repicked) {
         repicked = true;
