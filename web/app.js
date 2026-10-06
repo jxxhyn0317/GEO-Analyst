@@ -237,7 +237,6 @@ async function runAnalysis(url, apiKey) {
     try { result = GEO.analyze(page.html, url, page); }
     catch (e) { throw new AuditError('PARSE', e.message); }
     result.fetchWarnings = page.warnings || [];
-    const [d1, d2, d3, d4] = result.dimensions;
     note(`${result.measure.headings.length} content headings · ${result.measure.substantiveChars.toLocaleString('en-US')} chars of substantive text`);
     if (result.measure.jsHeavy) note('Very little text in the raw HTML; the content likely renders with JavaScript', 'red');
 
@@ -250,13 +249,9 @@ async function runAnalysis(url, apiKey) {
     judging.catch(() => {});
 
     progress(2, 0.7); await tick(700);
-    note(`D1 URL & Page Context: ${d1.score}/100`, colorOf(d1.score));
     progress(3, 0.7); await tick(700);
-    note(`D2 Page Structure: ${d2.score}/100`, colorOf(d2.score));
     progress(4, 0.7); await tick(700);
-    note(`D3 Answerability & Content Depth: ${d3.score}/100`, colorOf(d3.score));
     progress(5, 0.7); await tick(700);
-    note(`D4 Schema Markup: ${d4.score}/100`, colorOf(d4.score));
 
     liveNotes = true;
     held.forEach(([m, k]) => note(m, k));
@@ -280,7 +275,6 @@ async function geminiStage(result, apiKey, started) {
   GEO.applyJudgment(result, judgment);
   note(`AI judgment applied in ${((performance.now() - t1) / 1000).toFixed(1)}s`, 'green');
   progress(PAGE_STEPS.length - 1);
-  note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
   finishLoading();
   currentData = result;
   setTimeout(() => { renderDashboard(result); showScreen('screen-dashboard'); requestAnimationFrame(animateResults); }, 500);
@@ -344,7 +338,6 @@ async function runVideoAnalysis(url, apiKey) {
     if (!obs.metadataSeen) note('The description could not be read, so those groups are not scored', 'yellow');
     progress(8, 1);
     progress(9);
-    note(`GEO Readiness: ${result.overallScore}/100`, colorOf(result.overallScore));
     finishLoading();
     currentData = result;
     lastAudit.result = result;
